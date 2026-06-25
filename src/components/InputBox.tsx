@@ -57,7 +57,7 @@ export function InputBox({
         if (textareaRef.current) {
           textareaRef.current.focus();
           textareaRef.current.style.height = 'auto';
-          textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 180) + 'px';
+          textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 220) + 'px';
         }
       });
     });
@@ -132,11 +132,11 @@ export function InputBox({
     }
     const el = e.target;
     el.style.height = 'auto';
-    el.style.height = Math.min(el.scrollHeight, 180) + 'px';
+    el.style.height = Math.min(el.scrollHeight, 220) + 'px';
   };
 
   return (
-    <div style={{ position: 'relative', padding: '12px 16px 16px', borderTop: '1px solid #21262d', background: '#0d1117' }}>
+    <div style={{ position: 'relative', padding: '16px 20px 20px', borderTop: '1px solid #21262d', background: '#0d1117' }}>
       {/* slash 命令补全菜单 */}
       {slashOpen && filtered.length > 0 && (
         <div style={slashMenuStyle}>
@@ -155,17 +155,23 @@ export function InputBox({
         </div>
       )}
 
-      <div style={{ maxWidth: 820, margin: '0 auto', display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+      <div style={{ maxWidth: 880, margin: '0 auto', display: 'flex', gap: 12, alignItems: 'flex-end' }}>
         <textarea
           ref={textareaRef}
           value={text}
           onChange={onChange}
           onKeyDown={onKeyDown}
-          rows={1}
-          placeholder={isThinking ? 'claude 正在回复…' : '输入消息，/ 触发命令，Enter 发送'}
+          rows={2}
+          placeholder={isThinking ? 'claude 正在回复…' : '给 claude 发送消息，/ 调用命令，Shift+Enter 换行'}
           style={textareaStyle(slashOpen && filtered.length > 0)}
-          onFocus={(e) => (e.target.style.borderColor = '#58a6ff')}
-          onBlur={(e) => (e.target.style.borderColor = '#30363d')}
+          onFocus={(e) => {
+            e.target.style.borderColor = '#58a6ff';
+            e.target.style.boxShadow = '0 0 0 3px rgba(88,166,255,.15)';
+          }}
+          onBlur={(e) => {
+            e.target.style.borderColor = '#30363d';
+            e.target.style.boxShadow = 'none';
+          }}
           disabled={isThinking}
         />
         {isThinking ? (
@@ -183,16 +189,17 @@ function textareaStyle(border: boolean): React.CSSProperties {
     flex: 1, resize: 'none',
     border: '1px solid #30363d',
     borderTopColor: border ? '#30363d' : '#30363d',
-    borderRadius: 10, background: '#161b22', color: '#e6edf3',
-    padding: '10px 14px', fontSize: 14, lineHeight: 1.5, fontFamily: 'inherit',
-    outline: 'none', maxHeight: 180, transition: 'border-color .15s',
+    borderRadius: 14, background: '#161b22', color: '#e6edf3',
+    padding: '14px 16px', fontSize: 15, lineHeight: 1.6, fontFamily: 'inherit',
+    outline: 'none', minHeight: 56, maxHeight: 220, transition: 'border-color .15s, box-shadow .15s',
   };
 }
 function btnStyle(bg: string, disabled = false): React.CSSProperties {
   return {
-    flex: '0 0 auto', padding: '10px 20px', border: 'none', borderRadius: 10,
+    flex: '0 0 auto', padding: '14px 24px', border: 'none', borderRadius: 14,
     background: disabled ? '#21262d' : bg, color: disabled ? '#484f58' : '#fff',
-    fontSize: 14, fontWeight: 500, cursor: disabled ? 'not-allowed' : 'pointer',
+    fontSize: 14, fontWeight: 600, cursor: disabled ? 'not-allowed' : 'pointer',
+    minHeight: 56,
   };
 }
 const slashMenuStyle: React.CSSProperties = {
