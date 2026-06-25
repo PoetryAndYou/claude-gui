@@ -81,6 +81,7 @@ function ActionBtn({ title, onClick, children }: { title: string; onClick: () =>
 
 const hoverBarStyle: React.CSSProperties = {
   display: 'flex', alignItems: 'center', gap: 2, marginTop: 6,
+  transition: 'opacity .12s',
 };
 
 export function MessageBubble({
@@ -173,26 +174,37 @@ export function MessageBubble({
           </div>
         )}
 
-        {/* 助手消息底部：用量 + 操作（重生成/复制） */}
-        {!isUser && (message.usage || (hovered && canAct)) && (
-          <div style={{ ...hoverBarStyle, justifyContent: 'flex-start', opacity: hovered || message.usage ? 1 : 0.6 }}>
+        {/* 助手消息底部：用量 + 操作（重生成/复制）。
+            常驻占位，hover 时只切透明度，不增删 DOM，避免高度抖动 */}
+        {!isUser && (
+          <div style={{
+            ...hoverBarStyle,
+            justifyContent: 'flex-start',
+            minHeight: 22,
+            opacity: hovered || !!message.usage ? 1 : 0,
+            pointerEvents: hovered && canAct ? 'auto' : 'none',
+          }}>
             {message.usage && <UsageBar usage={message.usage} />}
-            {hovered && canAct && (
-              <div style={{ display: 'flex', marginLeft: 'auto' }}>
-                <ActionBtn title="复制" onClick={() => navigator.clipboard.writeText(message.content)}>
-                  <Icon name="copy" size={13} color="var(--text-muted)" />
-                </ActionBtn>
-                <ActionBtn title="重新生成" onClick={() => onRegenerate?.()}>
-                  <Icon name="refresh" size={13} color="var(--text-muted)" />
-                </ActionBtn>
-              </div>
-            )}
+            <div style={{ display: 'flex', marginLeft: 'auto' }}>
+              <ActionBtn title="复制" onClick={() => navigator.clipboard.writeText(message.content)}>
+                <Icon name="copy" size={13} color="var(--text-muted)" />
+              </ActionBtn>
+              <ActionBtn title="重新生成" onClick={() => onRegenerate?.()}>
+                <Icon name="refresh" size={13} color="var(--text-muted)" />
+              </ActionBtn>
+            </div>
           </div>
         )}
 
-        {/* 用户消息底部：编辑按钮（hover） */}
-        {isUser && hovered && canAct && (
-          <div style={{ ...hoverBarStyle, justifyContent: 'flex-end' }}>
+        {/* 用户消息底部：编辑按钮（hover）。同样常驻占位 */}
+        {isUser && (
+          <div style={{
+            ...hoverBarStyle,
+            justifyContent: 'flex-end',
+            minHeight: 22,
+            opacity: hovered && canAct ? 1 : 0,
+            pointerEvents: hovered && canAct ? 'auto' : 'none',
+          }}>
             <ActionBtn title="编辑" onClick={() => { setEditText(message.content); setEditing(true); }}>
               <Icon name="edit" size={13} color="#ffffffcc" />
             </ActionBtn>
