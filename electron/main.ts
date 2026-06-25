@@ -158,7 +158,24 @@ function extractUsage(obj: any): Usage | null {
   return { inputTokens: inTok, outputTokens: outTok, durationMs: dur, totalCostUsd: cost };
 }
 
-// 标题规则：首条用户消息 → 取首句/首行，去命令前缀和标点，限长
+// 把 tool_result 的 content（可能是 string 或 [{type,text}] 数组）压平成字符串，限长
+function summarizeToolResult(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    const parts: string[] = [];
+    for (const b of content) {
+      if (b && typeof b === 'object') {
+        const bb = b as any;
+        if (typeof bb.text === 'string') parts.push(bb.text);
+        else if (typeof bb.content === 'string') parts.push(bb.content);
+      }
+    }
+    return parts.join('\n');
+  }
+  try {
+    return content == null ? '' : String(content);
+  } catch (_) { return ''; }
+}
 function makeTitle(text: string): string {
   let t = text.trim();
   // 去掉开头的 / 命令、@ 文件
@@ -257,19 +274,48 @@ ipcMain.handle('claude:ask', (_e, prompt: string) => {
 
         // 流式增量
         if (obj.type === 'stream_event' && obj.event?.type === 'content_block_delta') {
-          const text = obj.event?.delta?.text;
-          if (text) sendConv(genConvId, 'claude:chunk', text);
+          const delta = obj.event?.delta;
+          // 思考过程的增量
+          if (delta?.type === 'thinking_delta' && delta.thinking) {
+            sendConv(genConvId, 'claude:event', { kind: 'thinking', text: delta.thinking });
+          }
+          // 文字增量
+          else if (delta?.type === 'text_delta' && delta.text) {
+            sendConv(genConvId, 'claude:chunk', delta.text);
+          }
+          // 工具输入增量（部分参数流式到位，忽略，用完整事件里的 input）
         }
-        // 助手完整消息
+        // 助手完整消息：拆出 thinking / tool_use / text 三类块，分别处理
         else if (obj.type === 'assistant' && Array.isArray(obj.message?.content)) {
-        for (const block of obj.message.content) {
-          if (block.type === 'text' && block.text) sendConv(genConvId, 'claude:chunk', block.text);
-          if (block.type === 'tool_use') {
-            sendConv(genConvId, 'claude:chunk', `\n🔧 工具调用: ${block.name}\n`);
+          for (const block of obj.message.content) {
+            if (block.type === 'thinking' && block.thinking) {
+              sendConv(genConvId, 'claude:event', { kind: 'thinking', text: block.thinking });
+            } else if (block.type === 'text' && block.text) {
+              sendConv(genConvId, 'claude:chunk', block.text);
+            } else if (block.type === 'tool_use') {
+              sendConv(genConvId, 'claude:event', {
+                kind: 'tool_use',
+                toolUseId: block.id,
+                name: block.name,
+                input: block.input,
+              });
+            }
           }
         }
-      }
-      // 最终结果
+        // user 消息里的 tool_result：把工具执行结果接到对应工具调用后面
+        else if (obj.type === 'user' && Array.isArray(obj.message?.content)) {
+          for (const block of obj.message.content) {
+            if (block.type === 'tool_result') {
+              sendConv(genConvId, 'claude:event', {
+                kind: 'tool_result',
+                toolUseId: block.tool_use_id,
+                content: summarizeToolResult(block.content),
+                isError: !!block.is_error,
+              });
+            }
+          }
+        }
+        // 最终结果
       else if (obj.type === 'result') {
         // 检测 --resume 失败（session 不存在）：自动降级重试一次（不带 resume）
         if (

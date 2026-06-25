@@ -6,6 +6,7 @@ import { vscDarkPlus, oneLight } from 'react-syntax-highlighter/dist/esm/styles/
 import type { Message } from '../hooks/useClaude';
 import type { Theme } from '../hooks/useClaude';
 import { Icon } from './Icon';
+import { ProcessSteps } from './ProcessSteps';
 import type { Usage } from '../../electron/preload';
 
 // 把 token 数转成可读字符串
@@ -147,6 +148,8 @@ export function MessageBubble({
           <div style={{ whiteSpace: 'pre-wrap' }}>{message.content}</div>
         ) : (
           <div className="markdown-body">
+            {/* 过程展示：思考 + 工具调用卡片（Codex 式），出现在最终文字之前 */}
+            <ProcessSteps events={message.events ?? []} streaming={streaming} />
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={{
@@ -162,7 +165,7 @@ export function MessageBubble({
                 },
               }}
             >
-              {message.content || (streaming ? '思考中…' : '')}
+              {message.content || (streaming && (!message.events || message.events.length === 0) ? '思考中…' : '')}
             </ReactMarkdown>
             {streaming && message.content && (
               <span className="cursor-blink">▋</span>

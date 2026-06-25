@@ -20,6 +20,17 @@ export interface Usage {
   totalCostUsd: number;
 }
 
+// 过程事件：思考 / 工具调用 / 工具结果（按顺序流入当前助手消息）
+export interface ToolEvent {
+  kind: 'thinking' | 'tool_use' | 'tool_result';
+  text?: string;            // thinking
+  toolUseId?: string;       // tool_use / tool_result 关联用
+  name?: string;            // tool_use 的工具名
+  input?: unknown;          // tool_use 的参数
+  content?: string;         // tool_result 的结果文本
+  isError?: boolean;        // tool_result 是否出错
+}
+
 export interface Conversation {
   id: string;
   title: string;
@@ -44,6 +55,7 @@ export interface ClaudeAPI {
   onStatus: (cb: (convId: string, status: string) => void) => void;
   onError: (cb: (convId: string, msg: string) => void) => void;
   onUsage: (cb: (convId: string, usage: Usage) => void) => void;
+  onEvent: (cb: (convId: string, event: ToolEvent) => void) => void;
   // 工作空间
   getWorkspace: () => Promise<string>;
   setWorkspace: (dir: string) => Promise<string>;
@@ -71,6 +83,8 @@ contextBridge.exposeInMainWorld('claude', {
     ipcRenderer.on('claude:error', (_e, convId, msg) => cb(convId, msg)),
   onUsage: (cb: (convId: string, usage: Usage) => void) =>
     ipcRenderer.on('claude:usage', (_e, convId, usage) => cb(convId, usage)),
+  onEvent: (cb: (convId: string, event: ToolEvent) => void) =>
+    ipcRenderer.on('claude:event', (_e, convId, event) => cb(convId, event)),
   getWorkspace: () => ipcRenderer.invoke('claude:get-workspace'),
   setWorkspace: (dir: string) => ipcRenderer.invoke('claude:set-workspace', dir),
   pickDirectory: () => ipcRenderer.invoke('claude:pick-directory'),

@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { Conversation, ClaudeItems, Usage } from '../../electron/preload';
+import type { Conversation, ClaudeItems, Usage, ToolEvent } from '../../electron/preload';
 
 export interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   usage?: Usage | null;   // 仅助手消息：token / 耗时 / 成本
+  events?: ToolEvent[];   // 仅助手消息：思考/工具调用过程（Codex 式展示）
   error?: boolean;        // 标记出错的消息
 }
 
@@ -121,6 +122,46 @@ export function useClaude() {
           ...prev,
           [convId]: {
             messages: c.messages.map((m) => (m.id === sid ? { ...m, usage } : m)),
+          },
+        };
+      });
+    });
+    // 过程事件：思考 / 工具调用 / 工具结果（按顺序流入当前助手消息的 events）
+    api.onEvent((convId, event) => {
+      const sid = streamingIds.current[convId];
+      if (!sid) return;
+      setConvs((prev) => {
+        const c = prev[convId];
+        if (!c) return prev;
+        return {
+          ...prev,
+          [convId]: {
+            messages: c.messages.map((m) => {
+              if (m.id !== sid) return m;
+              const events = [...(m.events ?? [])];
+              if (event.kind === 'thinking') {
+                // 思考是增量拼接：若最后一条也是 thinking 就续上，否则新增
+                const last = events[events.length - 1];
+                if (last && last.kind === 'thinking') {
+                  events[events.length - 1] = { ...last, text: (last.text ?? '') + (event.text ?? '') };
+                } else {
+                  events.push({ ...event });
+                }
+              } else if (event.kind === 'tool_use') {
+                events.push({ ...event });
+              } else if (event.kind === 'tool_result') {
+                // 找到对应的 tool_use，把结果挂上去
+                const idx = event.toolUseId
+                  ? events.findIndex((e) => e.kind === 'tool_use' && e.toolUseId === event.toolUseId)
+                  : -1;
+                if (idx >= 0) {
+                  events[idx] = { ...events[idx], content: event.content, isError: event.isError };
+                } else {
+                  events.push({ ...event });
+                }
+              }
+              return { ...m, events };
+            }),
           },
         };
       });
