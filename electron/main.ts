@@ -84,6 +84,58 @@ function findClaude(): string {
   return 'claude';
 }
 
+// 跨平台目录递归扫描（替代 Unix find，Windows 也能用）
+// maxDepth: 最大深度；返回找到的文件/目录绝对路径数组
+const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', '.cache', 'tmp']);
+function walkDir(root: string, maxDepth: number, limit = 500): string[] {
+  const results: string[] = [];
+  const walk = (dir: string, depth: number) => {
+    if (results.length >= limit) return;
+    if (depth > maxDepth) return;
+    let entries: fs.Dirent[];
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); }
+    catch (_) { return; }
+    for (const ent of entries) {
+      if (results.length >= limit) break;
+      if (ent.name.startsWith('.') && ent.name !== '.agents' && ent.name !== '.claude') continue;
+      const full = path.join(dir, ent.name);
+      if (ent.isDirectory()) {
+        if (SKIP_DIRS.has(ent.name)) continue;
+        results.push(full);
+        walk(full, depth + 1);
+      } else if (ent.isFile()) {
+        results.push(full);
+      }
+    }
+  };
+  walk(root, 0);
+  return results;
+}
+
+// 在 root 下按文件名查找（跨平台，递归到指定深度），返回路径数组
+function findFilesByName(root: string, name: string, maxDepth = 8, limit = 200): string[] {
+  const results: string[] = [];
+  const walk = (dir: string, depth: number) => {
+    if (results.length >= limit) return;
+    if (depth > maxDepth) return;
+    let entries: fs.Dirent[];
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); }
+    catch (_) { return; }
+    for (const ent of entries) {
+      if (results.length >= limit) break;
+      const full = path.join(dir, ent.name);
+      if (ent.isFile() && ent.name === name) {
+        results.push(full);
+      } else if (ent.isDirectory()) {
+        if (SKIP_DIRS.has(ent.name)) continue;
+        walk(full, depth + 1);
+      }
+    }
+  };
+  walk(root, 0);
+  return results;
+}
+
 // ──────────────────────────────────────────────
 // 对话管理：多对话，每个对话 {id, title, sessionId, workspace, createdAt}
 // workspace = 该对话绑定的项目目录（claude 在此 cwd 执行），持久化
@@ -529,9 +581,9 @@ ipcMain.handle('claude:list-files', (_e, query: string) => {
   try {
     syncWorkspace();
     const q = (query || '').trim();
-    // 从工作空间根扫描，拼相对路径
-    let cmd = `find "${workspace}" -maxdepth 3 -not -path '*/node_modules/*' -not -path '*/.git/*' -not -path '*/dist/*' 2>/dev/null | head -200`;
-    const out = execSync(cmd, { encoding: 'utf8' }).trim().split('\n').filter(Boolean).slice(0, 200);
+    // 跨平台递归扫描工作空间（替代 Unix find）
+    const files = walkDir(workspace, 3, 200);
+    const out = files;
     const entries = out.map((p) => {
       const rel = path.relative(workspace, p);
       const name = path.basename(p);
@@ -561,8 +613,8 @@ ipcMain.handle('claude:load-history', (_e, sessionId: string) => {
   if (!sessionId) return [];
   syncWorkspace();
   const home = require('os').homedir();
-  // session 文件在 ~/.claude/projects/<编码cwd>/<session>.jsonl，cwd 的 / 替换成 -
-  const encodedCwd = workspace.replace(/\//g, '-');
+  // session 文件在 ~/.claude/projects/<编码cwd>/<session>.jsonl，cwd 的路径分隔符替换成 -
+  const encodedCwd = workspace.replace(/[/\\]/g, '-');
   const candidates = [
     path.join(home, '.claude/projects', encodedCwd, `${sessionId}.jsonl`),
   ];
@@ -570,8 +622,8 @@ ipcMain.handle('claude:load-history', (_e, sessionId: string) => {
   let file = candidates.find((f) => { try { return fs.existsSync(f); } catch (_) { return false; } });
   if (!file) {
     try {
-      const found = execSync(`find "${path.join(home, '.claude/projects')}" -name "${sessionId}.jsonl" 2>/dev/null`, { encoding: 'utf8' }).trim();
-      if (found) file = found.split('\n')[0];
+      const found = findFilesByName(path.join(home, '.claude/projects'), `${sessionId}.jsonl`, 3, 5);
+      if (found.length) file = found[0];
     } catch (_) {}
   }
   if (!file) return [];
@@ -655,8 +707,7 @@ function scanSkills(): CmdItem[] {
     if (!fs.existsSync(root)) continue;
     let files: string[] = [];
     try {
-      files = execSync(`find "${root}" -name "SKILL.md" 2>/dev/null`, { encoding: 'utf8' })
-        .trim().split('\n').filter(Boolean);
+      files = findFilesByName(root, 'SKILL.md', 6, 200);
     } catch (_) { continue; }
     for (const f of files) {
       if (seen.has(f)) continue;

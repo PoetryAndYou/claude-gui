@@ -149,7 +149,7 @@ export default function App() {
           {error && (
             <div style={{
               padding: '8px 16px', background: 'var(--red-soft)', color: 'var(--red)',
-              fontSize: 12, borderBottom: '1px solid color-mix(in srgb, var(--red) 25%, transparent)', whiteSpace: 'pre-wrap',
+              fontSize: 12, borderBottom: '1px solid var(--red-border)', whiteSpace: 'pre-wrap',
             }}>
               ⚠️ {error}
             </div>

@@ -399,7 +399,7 @@ function sendCircleBtnStyle(disabled: boolean): React.CSSProperties {
 }
 // 停止按钮（方形停止图标）
 const stopCircleBtnStyle: React.CSSProperties = {
-  width: 32, height: 32, borderRadius: 8, border: '1px solid color-mix(in srgb, var(--red) 40%, transparent)',
+  width: 32, height: 32, borderRadius: 8, border: '1px solid var(--red-border-strong)',
   background: 'var(--red-soft)', cursor: 'pointer',
   display: 'flex', alignItems: 'center', justifyContent: 'center',
 };

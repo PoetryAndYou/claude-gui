@@ -20,6 +20,8 @@
   --green: #3fb950;
   --red: #ff7b72;
   --red-soft: rgba(248,81,73,.12);
+  --red-border: rgba(248,81,73,.25);
+  --red-border-strong: rgba(248,81,73,.45);
   --code-bg: rgba(110,118,129,.25);
   --code-inline-bg: rgba(110,118,129,.25);
   --hover-overlay: rgba(177,186,196,.08);
@@ -45,6 +47,8 @@ html.light {
   --green: #1a7f37;
   --red: #cf222e;
   --red-soft: rgba(207,34,46,.1);
+  --red-border: rgba(207,34,46,.25);
+  --red-border-strong: rgba(207,34,46,.45);
   --code-bg: rgba(175,184,193,.2);
   --code-inline-bg: rgba(175,184,193,.2);
   --hover-overlay: rgba(208,215,222,.32);
