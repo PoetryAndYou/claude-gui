@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useMemo, type KeyboardEvent } from 'react';
 import type { ClaudeItems } from '../../electron/preload';
+import { Icon } from './Icon';
 
 interface CmdEntry { cmd: string; desc?: string; kind: '命令' | '技能' | '代理'; }
 interface FileEntry { name: string; path: string; isDir: boolean; }
@@ -190,7 +191,9 @@ export function InputBox({
           ) : (
             atFiles.slice(0, 10).map((f, i) => (
               <div key={f.path} onMouseDown={(e) => { e.preventDefault(); acceptAt(f); }} onMouseEnter={() => setAtIdx(i)} style={slashItemStyle(i === atIdx)}>
-                <span style={{ marginRight: 8 }}>{f.isDir ? '📁' : '📄'}</span>
+                <span style={{ marginRight: 8, display: 'inline-flex', verticalAlign: 'middle' }}>
+                  <Icon name={f.isDir ? 'folder' : 'file'} size={14} color={i === atIdx ? '#fff' : '#7d8590'} />
+                </span>
                 <span style={{ fontWeight: 500 }}>{f.name}</span>
                 <span style={{ color: i === atIdx ? 'rgba(255,255,255,.5)' : '#6e7681', fontSize: 11, marginLeft: 8 }}>{f.path}</span>
               </div>

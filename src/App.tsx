@@ -3,6 +3,7 @@ import { useClaude } from './hooks/useClaude';
 import { MessageList } from './components/MessageList';
 import { InputBox } from './components/InputBox';
 import { Sidebar } from './components/Sidebar';
+import { Icon } from './components/Icon';
 
 export default function App() {
   const {
@@ -27,7 +28,9 @@ export default function App() {
         padding: '0 14px', borderBottom: '1px solid #21262d',
         background: '#010409', WebkitAppRegion: 'drag',
       } as React.CSSProperties}>
-        <span style={{ marginLeft: 70, fontSize: 13, color: '#6e7681' }}>⚡ Claude</span>
+        <span style={{ marginLeft: 70, fontSize: 13, color: '#6e7681', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <Icon name="bolt" size={14} color="#58a6ff" /> Claude
+        </span>
       </header>
 
       {/* 主体：侧边栏 + 对话区 */}

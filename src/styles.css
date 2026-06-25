@@ -9,19 +9,23 @@ html, body, #root {
 }
 
 body {
-  -webkit-app-region: drag;        /* 整体可拖动窗口（标题栏隐藏后） */
   overflow: hidden;
 }
 
-button, input, textarea {
-  -webkit-app-region: no-drag;     /* 交互元素不拖动 */
+/* 只有 .drag-region 区域可拖动窗口（标题栏），其他地方正常点击 */
+.drag-region {
+  -webkit-app-region: drag;
+}
+button, input, textarea, a, .no-drag {
+  -webkit-app-region: no-drag;
 }
 
 /* 滚动条 */
-::-webkit-scrollbar { width: 8px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #30363d; border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: #484f58; }
+/* 滚动条：常驻显示、稍明显 */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: rgba(255,255,255,.02); border-radius: 5px; }
+::-webkit-scrollbar-thumb { background: #484f58; border-radius: 5px; }
+::-webkit-scrollbar-thumb:hover { background: #6e7681; }
 
 /* 流式光标闪烁 */
 @keyframes blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }

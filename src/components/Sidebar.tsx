@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { ClaudeItems, Conversation } from '../../electron/preload';
 import { ConversationList } from './ConversationList';
+import { Icon } from './Icon';
 
 export function Sidebar({
   onPickCommand,
@@ -71,21 +72,21 @@ export function Sidebar({
       {/* 工作空间 */}
       <div>
         <div style={labelStyle}>工作空间</div>
-        <button onClick={pickDir} title={workspace} style={sideBtnStyle}>
-          📁 {shortPath.length > 22 ? '…' + shortPath.slice(-21) : shortPath}
+        <button onClick={pickDir} title={workspace} style={{ ...sideBtnStyle, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Icon name="folder" size={14} color="#7d8590" /> <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{shortPath.length > 22 ? '…' + shortPath.slice(-21) : shortPath}</span>
         </button>
       </div>
 
       {/* 拉取按钮 */}
-      <button onClick={load} style={{ ...sideBtnStyle, color: '#58a6ff', borderColor: '#1f6feb33' }}>
-        ⚡ {loading ? '加载中…' : loaded ? '刷新命令/技能' : '加载命令/技能'}
+      <button onClick={load} style={{ ...sideBtnStyle, color: '#58a6ff', borderColor: '#1f6feb33', display: 'flex', alignItems: 'center', gap: 6 }}>
+        <Icon name="zap" size={14} color="#58a6ff" /> {loading ? '加载中…' : loaded ? '刷新命令/技能' : '加载命令/技能'}
       </button>
 
       {/* 三组列表 */}
       {loaded && !loading && (
         <>
           <CommandGroup
-            title="命令" icon="/" count={items.commands.length}
+            title="命令" icon={<Icon name="command" size={13} color="#58a6ff" />} count={items.commands.length}
             collapsed={collapsed.commands}
             onToggle={() => toggle('commands')}
             renderItem={(c) => (
@@ -96,7 +97,7 @@ export function Sidebar({
             items={items.commands}
           />
           <CommandGroup
-            title="技能" icon="★" count={items.skills.length}
+            title="技能" icon={<Icon name="star" size={13} color="#bc8cff" />} count={items.skills.length}
             collapsed={collapsed.skills}
             onToggle={() => toggle('skills')}
             renderItem={(s) => (
@@ -108,7 +109,7 @@ export function Sidebar({
             items={items.skills}
           />
           <CommandGroup
-            title="代理" icon="◎" count={items.agents.length}
+            title="代理" icon={<Icon name="circle" size={13} color="#3fb950" />} count={items.agents.length}
             collapsed={collapsed.agents}
             onToggle={() => toggle('agents')}
             renderItem={(c) => (
@@ -130,7 +131,7 @@ export function Sidebar({
 function CommandGroup<T>({
   title, icon, count, collapsed, onToggle, items, renderItem,
 }: {
-  title: string; icon: string; count: number;
+  title: string; icon: React.ReactNode; count: number;
   collapsed: boolean; onToggle: () => void;
   items: T[]; renderItem: (item: T) => React.ReactNode;
 }) {
@@ -138,7 +139,9 @@ function CommandGroup<T>({
   return (
     <div>
       <button onClick={onToggle} style={groupHeaderStyle}>
-        <span>{icon} {title} <span style={{ color: '#484f58' }}>{count}</span></span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {icon} {title} <span style={{ color: '#484f58' }}>{count}</span>
+        </span>
         <span style={{ color: '#484f58' }}>{collapsed ? '▶' : '▼'}</span>
       </button>
       {!collapsed && (

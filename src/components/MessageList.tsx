@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { MessageBubble } from './MessageBubble';
+import { Icon } from './Icon';
 import type { Message, ChatStatus } from '../hooks/useClaude';
 
 export function MessageList({ messages, status }: { messages: Message[]; status: ChatStatus }) {
@@ -21,7 +22,7 @@ export function MessageList({ messages, status }: { messages: Message[]; status:
         color: '#484f58',
         gap: 12,
       }}>
-        <div style={{ fontSize: 48 }}>⚡</div>
+        <div style={{ color: '#58a6ff' }}><Icon name="bolt" size={48} color="#58a6ff" /></div>
         <div style={{ fontSize: 18, color: '#6e7681' }}>Claude GUI</div>
         <div style={{ fontSize: 13 }}>在下方输入消息，开始对话</div>
       </div>
