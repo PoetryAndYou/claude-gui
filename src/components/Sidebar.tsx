@@ -54,8 +54,8 @@ export function Sidebar({
   return (
     <div style={{
       width: 230, flex: '0 0 auto',
-      borderRight: '1px solid #21262d',
-      background: '#010409',
+      borderRight: '1px solid var(--border-soft)',
+      background: 'var(--bg-elev-2)',
       padding: '12px 10px',
       overflowY: 'auto',
       display: 'flex', flexDirection: 'column', gap: 14,
@@ -74,20 +74,20 @@ export function Sidebar({
       <div>
         <div style={labelStyle}>工作空间</div>
         <button onClick={pickDir} title={workspace} style={{ ...sideBtnStyle, display: 'flex', alignItems: 'center', gap: 6 }}>
-          <Icon name="folder" size={14} color="#7d8590" /> <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{shortPath.length > 22 ? '…' + shortPath.slice(-21) : shortPath}</span>
+          <Icon name="folder" size={14} color="var(--text-muted)" /> <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{shortPath.length > 22 ? '…' + shortPath.slice(-21) : shortPath}</span>
         </button>
       </div>
 
       {/* 拉取按钮 */}
-      <button onClick={load} style={{ ...sideBtnStyle, color: '#58a6ff', borderColor: '#1f6feb33', display: 'flex', alignItems: 'center', gap: 6 }}>
-        <Icon name="zap" size={14} color="#58a6ff" /> {loading ? '加载中…' : loaded ? '刷新命令/技能' : '加载命令/技能'}
+      <button onClick={load} style={{ ...sideBtnStyle, color: 'var(--accent)', borderColor: 'var(--accent-soft)', display: 'flex', alignItems: 'center', gap: 6 }}>
+        <Icon name="zap" size={14} color="var(--accent)" /> {loading ? '加载中…' : loaded ? '刷新命令/技能' : '加载命令/技能'}
       </button>
 
       {/* 三组列表 */}
       {loaded && !loading && (
         <>
           <CommandGroup
-            title="命令" icon={<Icon name="command" size={13} color="#58a6ff" />} count={items.commands.length}
+            title="命令" icon={<Icon name="command" size={13} color="var(--accent)" />} count={items.commands.length}
             collapsed={collapsed.commands}
             onToggle={() => toggle('commands')}
             renderItem={(c) => (
@@ -98,19 +98,19 @@ export function Sidebar({
             items={items.commands}
           />
           <CommandGroup
-            title="技能" icon={<Icon name="star" size={13} color="#bc8cff" />} count={items.skills.length}
+            title="技能" icon={<Icon name="star" size={13} color="var(--purple)" />} count={items.skills.length}
             collapsed={collapsed.skills}
             onToggle={() => toggle('skills')}
             renderItem={(s) => (
               <button key={s.name} onClick={() => onPickCommand('/' + s.name)} style={itemStyle} title={s.description}>
                 <div style={{ fontWeight: 500 }}>{s.name}</div>
-                {s.description && <div style={{ fontSize: 10, color: '#6e7681', marginTop: 1 }}>{s.description}</div>}
+                {s.description && <div style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 1 }}>{s.description}</div>}
               </button>
             )}
             items={items.skills}
           />
           <CommandGroup
-            title="代理" icon={<Icon name="circle" size={13} color="#3fb950" />} count={items.agents.length}
+            title="代理" icon={<Icon name="circle" size={13} color="var(--green)" />} count={items.agents.length}
             collapsed={collapsed.agents}
             onToggle={() => toggle('agents')}
             renderItem={(c) => (
@@ -121,7 +121,7 @@ export function Sidebar({
             items={items.agents}
           />
           {items.commands.length === 0 && items.skills.length === 0 && items.agents.length === 0 && (
-            <div style={{ fontSize: 12, color: '#6e7681' }}>未获取到（请确认 claude 已登录）</div>
+            <div style={{ fontSize: 12, color: 'var(--text-faint)' }}>未获取到（请确认 claude 已登录）</div>
           )}
         </>
       )}
@@ -155,24 +155,24 @@ function CommandGroup<T>({
 }
 
 const labelStyle: React.CSSProperties = {
-  fontSize: 11, color: '#6e7681', marginBottom: 6,
+  fontSize: 11, color: 'var(--text-faint)', marginBottom: 6,
   textTransform: 'uppercase', letterSpacing: 0.5,
 };
 const sideBtnStyle: React.CSSProperties = {
   display: 'block', width: '100%', textAlign: 'left',
-  background: '#161b22', border: '1px solid #30363d', color: '#c9d1d9',
+  background: 'var(--bg-elev)', border: '1px solid var(--border)', color: 'var(--text-soft)',
   padding: '8px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
   whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
 };
 const groupHeaderStyle: React.CSSProperties = {
   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
   width: '100%', textAlign: 'left',
-  background: 'transparent', border: 'none', color: '#8b949e',
+  background: 'transparent', border: 'none', color: 'var(--text-muted)',
   padding: '6px 4px', fontSize: 12, fontWeight: 500, cursor: 'pointer',
 };
 const itemStyle: React.CSSProperties = {
   display: 'block', textAlign: 'left', background: 'transparent', border: 'none',
-  color: '#8b949e', padding: '5px 10px', borderRadius: 4,
+  color: 'var(--text-muted)', padding: '5px 10px', borderRadius: 4,
   fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', width: '100%',
   lineHeight: 1.4, whiteSpace: 'normal',
 };

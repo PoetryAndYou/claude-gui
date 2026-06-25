@@ -141,6 +141,38 @@ function currentSessionId(): string | null {
   return c ? c.sessionId : null;
 }
 
+// 从 result 事件提取用量信息（token / 耗时 / 成本），供前端在助手消息底部展示
+export interface Usage {
+  inputTokens: number;
+  outputTokens: number;
+  durationMs: number;
+  totalCostUsd: number;
+}
+function extractUsage(obj: any): Usage | null {
+  const u = obj?.usage;
+  const inTok = u?.input_tokens ?? u?.prompt_tokens ?? 0;
+  const outTok = u?.output_tokens ?? u?.completion_tokens ?? 0;
+  const dur = obj?.duration_ms ?? obj?.duration_api_ms ?? 0;
+  const cost = obj?.total_cost_usd ?? obj?.cost_usd ?? 0;
+  if (!inTok && !outTok && !dur && !cost) return null;
+  return { inputTokens: inTok, outputTokens: outTok, durationMs: dur, totalCostUsd: cost };
+}
+
+// 标题规则：首条用户消息 → 取首句/首行，去命令前缀和标点，限长
+function makeTitle(text: string): string {
+  let t = text.trim();
+  // 去掉开头的 / 命令、@ 文件
+  t = t.replace(/^\/[\w-]+\s*/, '').replace(/^@\S+\s*/, '');
+  // 取首行或首句
+  const firstLine = t.split(/\r?\n/)[0] || t;
+  const firstSentence = firstLine.split(/[。.！!？?；;\n]/)[0] || firstLine;
+  let clean = firstSentence.trim();
+  // 去掉 markdown 符号
+  clean = clean.replace(/[#*`>~_-]/g, '').trim();
+  if (!clean) clean = firstLine.slice(0, 30);
+  return clean.length > 30 ? clean.slice(0, 30) + '…' : clean;
+}
+
 // 当前正在运行的 claude 进程（用于中断）
 let currentProc: ChildProcessWithoutNullStreams | null = null;
 
@@ -260,6 +292,9 @@ ipcMain.handle('claude:ask', (_e, prompt: string) => {
           const c = conversations.find((cc) => cc.id === genConvId);
           if (c) { c.sessionId = obj.session_id; saveConversations(); }
         }
+        // 用量：result 事件里带 usage / duration_ms / total_cost_usd，发给前端展示
+        const usage = extractUsage(obj);
+        if (usage) sendConv(genConvId, 'claude:usage', usage);
         sendConv(genConvId, 'claude:status', 'done');
       }
     };
@@ -323,7 +358,7 @@ ipcMain.handle('conv:create', (_e, firstMessage?: string) => {
   const inheritedWs = currentWorkspace();
   const conv: Conversation = {
     id: `c-${Date.now()}`,
-    title: firstMessage ? firstMessage.slice(0, 30) : '新对话',
+    title: firstMessage ? makeTitle(firstMessage) : '新对话',
     sessionId: null,
     workspace: inheritedWs,
     createdAt: Date.now(),

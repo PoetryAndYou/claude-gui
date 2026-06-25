@@ -206,7 +206,7 @@ export function InputBox({
   };
 
   return (
-    <div style={{ position: 'relative', padding: '16px 20px 20px', borderTop: '1px solid #21262d', background: '#0d1117' }}>
+    <div style={{ position: 'relative', padding: '16px 20px 20px', borderTop: '1px solid var(--border-soft)', background: 'var(--bg-app)' }}>
       {/* / 补全菜单：限宽跟随输入框，不盖全行 */}
       {showSlash && <SlashMenu items={filtered} idx={slashIdx} onPick={acceptSlash} onHover={setSlashIdx} />}
 
@@ -214,17 +214,17 @@ export function InputBox({
       {showAt && (
         <div style={slashMenuStyle}>
           {atLoading ? (
-            <div style={{ padding: '10px 14px', fontSize: 13, color: '#6e7681' }}>扫描中…</div>
+            <div style={{ padding: '10px 14px', fontSize: 13, color: 'var(--text-faint)' }}>扫描中…</div>
           ) : atFiles.length === 0 ? (
-            <div style={{ padding: '10px 14px', fontSize: 13, color: '#6e7681' }}>无匹配文件</div>
+            <div style={{ padding: '10px 14px', fontSize: 13, color: 'var(--text-faint)' }}>无匹配文件</div>
           ) : (
             atFiles.slice(0, 10).map((f, i) => (
               <div key={f.path} onMouseDown={(e) => { e.preventDefault(); acceptAt(f); }} onMouseEnter={() => setAtIdx(i)} style={slashItemStyle(i === atIdx)}>
                 <span style={{ marginRight: 8, display: 'inline-flex', verticalAlign: 'middle' }}>
-                  <Icon name={f.isDir ? 'folder' : 'file'} size={14} color={i === atIdx ? '#fff' : '#7d8590'} />
+                  <Icon name={f.isDir ? 'folder' : 'file'} size={14} color={i === atIdx ? '#fff' : 'var(--text-muted)'} />
                 </span>
                 <span style={{ fontWeight: 500 }}>{f.name}</span>
-                <span style={{ color: i === atIdx ? 'rgba(255,255,255,.5)' : '#6e7681', fontSize: 11, marginLeft: 8 }}>{f.path}</span>
+                <span style={{ color: i === atIdx ? 'rgba(255,255,255,.5)' : 'var(--text-faint)', fontSize: 11, marginLeft: 8 }}>{f.path}</span>
               </div>
             ))
           )}
@@ -241,33 +241,33 @@ export function InputBox({
             onKeyDown={onKeyDown}
             rows={2}
             placeholder="给 claude 发送消息 · / 命令 · @ 文件 · Shift+Enter 换行"
-            style={{ flex: 1, resize: 'none', border: 'none', background: 'transparent', color: '#e6edf3', padding: '12px 14px 4px', fontSize: 15, lineHeight: 1.6, fontFamily: 'inherit', outline: 'none', maxHeight: 200 }}
-            onFocus={() => { if (containerRef.current) containerRef.current.style.borderColor = '#58a6ff'; }}
-            onBlur={() => { if (containerRef.current) containerRef.current.style.borderColor = '#30363d'; }}
+            style={{ flex: 1, resize: 'none', border: 'none', background: 'transparent', color: 'var(--text)', padding: '12px 14px 4px', fontSize: 15, lineHeight: 1.6, fontFamily: 'inherit', outline: 'none', maxHeight: 200 }}
+            onFocus={() => { if (containerRef.current) containerRef.current.style.borderColor = 'var(--accent)'; }}
+            onBlur={() => { if (containerRef.current) containerRef.current.style.borderColor = 'var(--border)'; }}
           />
           {/* 底部操作栏：左侧快捷按钮，右侧发送/停止 */}
           <div style={toolbarStyle}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <button onClick={insertSlash} style={toolBtnStyle} title="插入命令">
-                <Icon name="command" size={16} color="#7d8590" />
+                <Icon name="command" size={16} color="var(--text-muted)" />
               </button>
               <button onClick={insertAt} style={toolBtnStyle} title="提及文件">
-                <span style={{ fontSize: 16, color: '#7d8590', fontWeight: 500, lineHeight: 1 }}>@</span>
+                <span style={{ fontSize: 16, color: 'var(--text-muted)', fontWeight: 500, lineHeight: 1 }}>@</span>
               </button>
               {text && (
                 <button onClick={() => { setText(''); focusTextarea(); }} style={toolBtnStyle} title="清空">
-                  <Icon name="trash" size={15} color="#7d8590" />
+                  <Icon name="trash" size={15} color="var(--text-muted)" />
                 </button>
               )}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               {isThinking ? (
                 <button onClick={onStop} style={stopCircleBtnStyle} title="停止生成">
-                  <span style={{ width: 10, height: 10, background: '#ff7b72', borderRadius: 2, display: 'inline-block' }} />
+                  <span style={{ width: 10, height: 10, background: 'var(--red)', borderRadius: 2, display: 'inline-block' }} />
                 </button>
               ) : (
                 <button onClick={submit} disabled={!text.trim()} style={sendCircleBtnStyle(!text.trim())} title="发送">
-                  <Icon name="arrowUp" size={16} color={!text.trim() ? '#484f58' : '#fff'} />
+                  <Icon name="arrowUp" size={16} color={!text.trim() ? 'var(--text-fainter)' : '#fff'} />
                 </button>
               )}
             </div>
@@ -310,11 +310,11 @@ function SlashMenu({ items, idx, onPick, onHover }: {
             <span style={{ fontWeight: 600 }}>{entry.cmd}</span>
           </div>
           {entry.desc && (
-            <div style={{ fontSize: 11, color: i === idx ? 'rgba(255,255,255,.7)' : '#6e7681', marginTop: 2, paddingLeft: 32 }}>{entry.desc}</div>
+            <div style={{ fontSize: 11, color: i === idx ? 'rgba(255,255,255,.7)' : 'var(--text-faint)', marginTop: 2, paddingLeft: 32 }}>{entry.desc}</div>
           )}
         </div>
       ))}
-      {items.length > 8 && <div style={{ padding: '4px 12px', fontSize: 11, color: '#484f58' }}>还有 {items.length - 8} 项…</div>}
+      {items.length > 8 && <div style={{ padding: '4px 12px', fontSize: 11, color: 'var(--text-fainter)' }}>还有 {items.length - 8} 项…</div>}
     </div>
   );
 }
@@ -338,7 +338,7 @@ function SendIcon() {
 
 // 输入框容器：圆角边框，内部含 textarea + 底部工具栏（ZCode 风格）
 const inputContainerStyle: React.CSSProperties = {
-  border: '1px solid #30363d', borderRadius: 16, background: '#161b22',
+  border: '1px solid var(--border)', borderRadius: 16, background: 'var(--bg-input)',
   display: 'flex', flexDirection: 'column', overflow: 'hidden',
   transition: 'border-color .15s',
 };
@@ -360,7 +360,7 @@ const toolBtnStyle: React.CSSProperties = {
 function sendCircleBtnStyle(disabled: boolean): React.CSSProperties {
   return {
     width: 32, height: 32, borderRadius: 8, border: 'none',
-    background: disabled ? '#21262d' : '#2f81f7',
+    background: disabled ? 'var(--border-soft)' : 'var(--accent-2)',
     cursor: disabled ? 'not-allowed' : 'pointer',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
     transition: 'background .12s',
@@ -368,19 +368,19 @@ function sendCircleBtnStyle(disabled: boolean): React.CSSProperties {
 }
 // 停止按钮（方形停止图标）
 const stopCircleBtnStyle: React.CSSProperties = {
-  width: 32, height: 32, borderRadius: 8, border: '1px solid #f8514966',
-  background: 'rgba(248,81,73,.1)', cursor: 'pointer',
+  width: 32, height: 32, borderRadius: 8, border: '1px solid color-mix(in srgb, var(--red) 40%, transparent)',
+  background: 'var(--red-soft)', cursor: 'pointer',
   display: 'flex', alignItems: 'center', justifyContent: 'center',
 };
 
 const slashMenuStyle: React.CSSProperties = {
   position: 'absolute', bottom: '100%', marginBottom: 4,
-  background: '#161b22', border: '1px solid #30363d', borderRadius: 8,
-  boxShadow: '0 -8px 24px rgba(0,0,0,.4)', maxHeight: 280, overflowY: 'auto', zIndex: 10,
+  background: 'var(--bg-elev)', border: '1px solid var(--border)', borderRadius: 8,
+  boxShadow: '0 -8px 24px var(--shadow)', maxHeight: 280, overflowY: 'auto', zIndex: 10,
 };
 function slashItemStyle(active: boolean): React.CSSProperties {
   return {
     padding: '8px 12px', fontSize: 13, cursor: 'pointer', lineHeight: 1.4,
-    background: active ? '#1f6feb' : 'transparent', color: active ? '#fff' : '#c9d1d9',
+    background: active ? 'var(--accent-2)' : 'transparent', color: active ? '#fff' : 'var(--text-soft)',
   };
 }

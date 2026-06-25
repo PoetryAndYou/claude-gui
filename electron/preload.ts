@@ -13,6 +13,13 @@ export interface ClaudeItems {
   agents: string[];
 }
 
+export interface Usage {
+  inputTokens: number;
+  outputTokens: number;
+  durationMs: number;
+  totalCostUsd: number;
+}
+
 export interface Conversation {
   id: string;
   title: string;
@@ -36,6 +43,7 @@ export interface ClaudeAPI {
   onChunk: (cb: (convId: string, text: string) => void) => void;
   onStatus: (cb: (convId: string, status: string) => void) => void;
   onError: (cb: (convId: string, msg: string) => void) => void;
+  onUsage: (cb: (convId: string, usage: Usage) => void) => void;
   // 工作空间
   getWorkspace: () => Promise<string>;
   setWorkspace: (dir: string) => Promise<string>;
@@ -61,6 +69,8 @@ contextBridge.exposeInMainWorld('claude', {
     ipcRenderer.on('claude:status', (_e, convId, status) => cb(convId, status)),
   onError: (cb: (convId: string, msg: string) => void) =>
     ipcRenderer.on('claude:error', (_e, convId, msg) => cb(convId, msg)),
+  onUsage: (cb: (convId: string, usage: Usage) => void) =>
+    ipcRenderer.on('claude:usage', (_e, convId, usage) => cb(convId, usage)),
   getWorkspace: () => ipcRenderer.invoke('claude:get-workspace'),
   setWorkspace: (dir: string) => ipcRenderer.invoke('claude:set-workspace', dir),
   pickDirectory: () => ipcRenderer.invoke('claude:pick-directory'),
