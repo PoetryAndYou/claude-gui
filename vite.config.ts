@@ -13,14 +13,15 @@ export default defineConfig({
       {
         entry: 'electron/main.ts',
         vite: {
-          build: { outDir: 'dist-electron', rollupOptions: { external: ['electron'] } },
+          // 主进程跑在 Electron 内置 Node 上，node14 目标保守兼容旧 Node API
+          build: { outDir: 'dist-electron', rollupOptions: { external: ['electron'] }, target: 'node14', emptyOutDir: false },
         },
       },
       {
         entry: 'electron/preload.ts',
         onstart({ reload }) { reload(); },
         vite: {
-          build: { outDir: 'dist-electron', rollupOptions: { external: ['electron'] } },
+          build: { outDir: 'dist-electron', rollupOptions: { external: ['electron'] }, target: 'node14', emptyOutDir: false },
         },
       },
     ]),
@@ -29,6 +30,8 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
+    // 渲染进程目标：兼容 Electron 22 的 Chromium 108
+    target: 'chrome108',
   },
   server: {
     port: 5173,
