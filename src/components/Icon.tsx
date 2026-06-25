@@ -33,6 +33,10 @@ const PATHS: Record<string, string> = {
   chat: 'M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H8l-5 4V5z',
   // 警告
   warn: 'M12 2L2 20h20L12 2z M12 9v5m0 3v.5',
+  // 复制
+  copy: 'M8 8h12v12H8zM4 4h12v4M4 4v12h4',
+  // 勾（已复制）
+  check: 'M5 12l5 5L20 7',
 };
 
 export function Icon({

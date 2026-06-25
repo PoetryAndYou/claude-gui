@@ -362,6 +362,51 @@ ipcMain.handle('claude:list-files', (_e, query: string) => {
   }
 });
 
+// 加载历史消息：从 claude session jsonl 文件解析对话历史
+ipcMain.handle('claude:load-history', (_e, sessionId: string) => {
+  if (!sessionId) return [];
+  const home = require('os').homedir();
+  // session 文件在 ~/.claude/projects/<编码cwd>/<session>.jsonl，cwd 的 / 替换成 -
+  const encodedCwd = workspace.replace(/\//g, '-');
+  const candidates = [
+    path.join(home, '.claude/projects', encodedCwd, `${sessionId}.jsonl`),
+  ];
+  // 兜底：在所有 projects 子目录里找 session 文件
+  let file = candidates.find((f) => { try { return fs.existsSync(f); } catch (_) { return false; } });
+  if (!file) {
+    try {
+      const found = execSync(`find "${path.join(home, '.claude/projects')}" -name "${sessionId}.jsonl" 2>/dev/null`, { encoding: 'utf8' }).trim();
+      if (found) file = found.split('\n')[0];
+    } catch (_) {}
+  }
+  if (!file) return [];
+
+  try {
+    const lines = fs.readFileSync(file, 'utf8').split('\n').filter(Boolean);
+    const msgs: { id: string; role: 'user' | 'assistant'; content: string }[] = [];
+    for (const line of lines) {
+      let obj: any;
+      try { obj = JSON.parse(line); } catch (_) { continue; }
+      const role = obj?.message?.role;
+      if (role !== 'user' && role !== 'assistant') continue;
+      // 跳过工具调用产生的 user 消息（<command-*/工具结果）
+      let content = '';
+      const c = obj.message.content;
+      if (typeof c === 'string') content = c;
+      else if (Array.isArray(c)) {
+        for (const b of c) {
+          if (b?.type === 'text' && b.text) content += b.text;
+        }
+      }
+      if (!content || content.startsWith('<command-') || content.startsWith('Caveat')) continue;
+      msgs.push({ id: `${role}-${msgs.length}`, role, content });
+    }
+    return msgs;
+  } catch (_) {
+    return [];
+  }
+});
+
 ipcMain.handle('claude:get-commands', () => {
   return new Promise<ClaudeItems>((resolve) => {
     const claudeBin = findClaude();

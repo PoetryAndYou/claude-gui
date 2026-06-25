@@ -92,6 +92,8 @@ export function useClaude() {
   // 用 ref 保持 activeId 最新（给回调用）
   const activeIdRef = useRef(activeId);
   useEffect(() => { activeIdRef.current = activeId; }, [activeId]);
+  const convListRef = useRef(convList);
+  useEffect(() => { convListRef.current = convList; }, [convList]);
 
   const messages = activeId ? convs[activeId]?.messages ?? [] : [];
 
@@ -139,6 +141,15 @@ export function useClaude() {
       setStatus('idle');
       setError('');
       streamingId.current = null;
+      // 从 claude session 恢复历史消息
+      const conv = convListRef.current.find((c) => c.id === id);
+      if (conv?.sessionId) {
+        const history = await window.claude.loadHistory(conv.sessionId);
+        setConvs((prev) => ({
+          ...prev,
+          [id]: { messages: history },
+        }));
+      }
     }
   }, []);
 

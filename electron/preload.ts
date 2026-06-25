@@ -44,6 +44,8 @@ export interface ClaudeAPI {
   getSkills: () => Promise<{ name: string; description?: string }[]>;
   // 文件列表（@ 提及用）
   listFiles: (query: string) => Promise<{ name: string; path: string; isDir: boolean }[]>;
+  // 历史消息（从 session 恢复）
+  loadHistory: (sessionId: string) => Promise<{ id: string; role: 'user' | 'assistant'; content: string }[]>;
   // 对话管理
   conv: ConvAPI;
 }
@@ -64,6 +66,7 @@ contextBridge.exposeInMainWorld('claude', {
   getCommands: () => ipcRenderer.invoke('claude:get-commands'),
   getSkills: () => ipcRenderer.invoke('claude:get-skills'),
   listFiles: (query: string) => ipcRenderer.invoke('claude:list-files', query),
+  loadHistory: (sessionId: string) => ipcRenderer.invoke('claude:load-history', sessionId),
   conv: {
     list: () => ipcRenderer.invoke('conv:list'),
     create: (firstMessage?: string) => ipcRenderer.invoke('conv:create', firstMessage),
