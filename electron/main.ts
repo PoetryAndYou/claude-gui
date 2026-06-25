@@ -35,11 +35,40 @@ function createWindow() {
 // 逐行解析 JSON，把增量文字推给前端
 // ──────────────────────────────────────────────
 
-// 探测 claude 可执行路径（Windows 上可能是 claude.cmd / claude.ps1）
+// GUI 应用不读 shell 配置，PATH 里通常没有用户的 bin 目录（如 ~/.npm-global/bin）。
+// 这里把常见的用户安装路径补进 PATH，让 claude 能被找到。
+function ensureUserPath() {
+  const { existsSync } = require('fs');
+  const home = require('os').homedir();
+  // macOS / Linux 上常见的 npm/volta/nvm/用户 bin 目录
+  const extraDirs = [
+    `${home}/.npm-global/bin`,
+    `${home}/.local/bin`,
+    `${home}/.volta/bin`,
+    `${home}/.bun/bin`,
+    '/opt/homebrew/bin',
+    '/usr/local/bin',
+    // Windows nvm / npm 全局
+    `${home}/AppData/Roaming/npm`,
+    `${home}/AppData/Local/nvml`,
+  ];
+  const extra = extraDirs.filter((d) => {
+    try { return existsSync(d); } catch (_) { return false; }
+  });
+  const curPath = process.env.PATH || '';
+  const dirs = curPath.split(path.delimiter);
+  for (const d of extra) {
+    if (!dirs.includes(d)) dirs.push(d);
+  }
+  process.env.PATH = dirs.join(path.delimiter);
+}
+
+ensureUserPath();
+
+// 探测 claude 可执行路径（扩充 PATH 后再 which）
 function findClaude(): string {
   const { existsSync } = require('fs');
   const isWin = process.platform === 'win32';
-  // PATH 里的 claude（最常见）
   const candidates = isWin
     ? ['claude.cmd', 'claude.exe', 'claude']
     : ['claude'];
@@ -51,7 +80,7 @@ function findClaude(): string {
       if (which && existsSync(which)) return which;
     } catch (_) {}
   }
-  return 'claude'; // 兜底，让 spawn 报错给用户
+  return 'claude';
 }
 
 // 当前会话 id（用于 --resume 多轮对话）
@@ -143,7 +172,10 @@ ipcMain.handle('claude:ask', (_e, prompt: string) => {
     });
 
     currentProc.on('error', (err) => {
-      send('claude:error', `claude 启动失败: ${err.message}\n（请确认 claude 已安装并在 PATH 中）`);
+      const msg = err.message.includes('ENOENT') || err.message.includes('spawn')
+        ? `找不到 claude 命令。请确认已安装：npm install -g @anthropic-ai/claude-code\n（错误：${err.message}）`
+        : `claude 启动失败: ${err.message}`;
+      send('claude:error', msg);
       send('claude:status', 'error');
       resolve();
     });
