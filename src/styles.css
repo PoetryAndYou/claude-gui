@@ -27,6 +27,9 @@ button, input, textarea {
 @keyframes blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
 .cursor-blink { animation: blink 1s step-end infinite; color: #58a6ff; }
 
+/* 加载旋转 */
+@keyframes spin { to { transform: rotate(360deg); } }
+
 /* markdown 排版 */
 .markdown-body { font-size: 14px; line-height: 1.6; }
 .markdown-body p { margin: 0 0 8px; }

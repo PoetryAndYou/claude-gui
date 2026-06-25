@@ -336,6 +336,32 @@ export interface ClaudeItems {
 // skill 列表：纯文件扫描，即时返回（不依赖 claude 进程）
 ipcMain.handle('claude:get-skills', () => scanSkills());
 
+// 文件列表：@ 提及用，扫描工作空间下的文件/目录
+ipcMain.handle('claude:list-files', (_e, query: string) => {
+  try {
+    const q = (query || '').trim();
+    // 从工作空间根扫描，拼相对路径
+    let cmd = `find "${workspace}" -maxdepth 3 -not -path '*/node_modules/*' -not -path '*/.git/*' -not -path '*/dist/*' 2>/dev/null | head -200`;
+    const out = execSync(cmd, { encoding: 'utf8' }).trim().split('\n').filter(Boolean).slice(0, 200);
+    const entries = out.map((p) => {
+      const rel = path.relative(workspace, p);
+      const name = path.basename(p);
+      let isDir = false;
+      try { isDir = fs.statSync(p).isDirectory(); } catch (_) {}
+      return { name, path: rel, isDir };
+    });
+    // 按 query 过滤
+    if (q) {
+      const lq = q.toLowerCase();
+      return entries.filter((e) => e.name.toLowerCase().includes(lq) || e.path.toLowerCase().includes(lq)).slice(0, 50);
+    }
+    // 无 query 时优先列目录
+    return entries.filter((e) => e.isDir || e.path.indexOf('/') === -1).slice(0, 50);
+  } catch (_) {
+    return [];
+  }
+});
+
 ipcMain.handle('claude:get-commands', () => {
   return new Promise<ClaudeItems>((resolve) => {
     const claudeBin = findClaude();
