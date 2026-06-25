@@ -1,10 +1,23 @@
 import { useState, useEffect } from 'react';
-import type { ClaudeItems } from '../../electron/preload';
+import type { ClaudeItems, Conversation } from '../../electron/preload';
+import { ConversationList } from './ConversationList';
 
 export function Sidebar({
   onPickCommand,
+  conversations,
+  activeConvId,
+  onSelectConv,
+  onNewConv,
+  onDeleteConv,
+  onRenameConv,
 }: {
   onPickCommand: (cmd: string) => void;
+  conversations: Conversation[];
+  activeConvId: string | null;
+  onSelectConv: (id: string) => void;
+  onNewConv: () => void;
+  onDeleteConv: (id: string) => void;
+  onRenameConv: (id: string, title: string) => void;
 }) {
   const [workspace, setWorkspace] = useState('');
   const [items, setItems] = useState<ClaudeItems>({ commands: [], skills: [], agents: [] });
@@ -45,6 +58,16 @@ export function Sidebar({
       overflowY: 'auto',
       display: 'flex', flexDirection: 'column', gap: 14,
     } as React.CSSProperties}>
+      {/* 对话列表 */}
+      <ConversationList
+        conversations={conversations}
+        activeId={activeConvId}
+        onSelect={onSelectConv}
+        onNew={onNewConv}
+        onDelete={onDeleteConv}
+        onRename={onRenameConv}
+      />
+
       {/* 工作空间 */}
       <div>
         <div style={labelStyle}>工作空间</div>

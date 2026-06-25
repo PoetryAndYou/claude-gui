@@ -83,8 +83,46 @@ function findClaude(): string {
   return 'claude';
 }
 
-// 当前会话 id（用于 --resume 多轮对话）
-let sessionId: string | null = null;
+// ──────────────────────────────────────────────
+// 对话管理：多对话，每个对话 {id, title, sessionId, createdAt}
+// 持久化到 userData/conversations.json，切换对话 = 切换 activeId + sessionId
+// ──────────────────────────────────────────────
+interface Conversation {
+  id: string;            // GUI 内部 id
+  title: string;         // 显示名（取首条消息）
+  sessionId: string | null;  // claude 的 session_id（用于 --resume）
+  createdAt: number;
+}
+
+let conversations: Conversation[] = [];
+let activeConvId: string | null = null;
+
+function convStorePath(): string {
+  const dir = require('path').join(app.getPath('userData'), 'claude-gui-data');
+  try { require('fs').mkdirSync(dir, { recursive: true }); } catch (_) {}
+  return require('path').join(dir, 'conversations.json');
+}
+
+function loadConversations() {
+  try {
+    conversations = JSON.parse(require('fs').readFileSync(convStorePath(), 'utf8'));
+  } catch (_) { conversations = []; }
+}
+
+function saveConversations() {
+  try {
+    require('fs').writeFileSync(convStorePath(), JSON.stringify(conversations), 'utf8');
+  } catch (_) {}
+}
+
+loadConversations();
+
+// 当前 claude session_id（取自激活对话，便于 spawn 时 --resume）
+function currentSessionId(): string | null {
+  const c = conversations.find((c) => c.id === activeConvId);
+  return c ? c.sessionId : null;
+}
+
 // 当前正在运行的 claude 进程（用于中断）
 let currentProc: ChildProcessWithoutNullStreams | null = null;
 
@@ -115,9 +153,10 @@ ipcMain.handle('claude:pick-directory', async () => {
 // 启动一次 claude 对话
 ipcMain.handle('claude:ask', (_e, prompt: string) => {
   return new Promise<void>((resolve) => {
+    const sid = currentSessionId();
     const args = ['-p', prompt, '--output-format', 'stream-json', '--verbose'];
-    if (sessionId) {
-      args.unshift('--resume', sessionId);
+    if (sid) {
+      args.unshift('--resume', sid);
     }
 
     const claudeBin = findClaude();
@@ -144,9 +183,10 @@ ipcMain.handle('claude:ask', (_e, prompt: string) => {
       let obj: any;
       try { obj = JSON.parse(trimmed); } catch (_) { return; } // 非 JSON 行忽略
 
-      // 捕获 session_id（用于后续 --resume）
+      // 捕获 session_id（存到当前激活对话，用于后续 --resume）
       if (obj.type === 'system' && obj.subtype === 'init' && obj.session_id) {
-        sessionId = obj.session_id;
+        const c = conversations.find((c) => c.id === activeConvId);
+        if (c) { c.sessionId = obj.session_id; saveConversations(); }
       }
 
       // API 限流重试：通知前端，避免用户以为卡死
@@ -170,7 +210,10 @@ ipcMain.handle('claude:ask', (_e, prompt: string) => {
       }
       // 最终结果
       else if (obj.type === 'result') {
-        if (obj.session_id) sessionId = obj.session_id;
+        if (obj.session_id) {
+          const c = conversations.find((c) => c.id === activeConvId);
+          if (c) { c.sessionId = obj.session_id; saveConversations(); }
+        }
         send('claude:status', 'done');
       }
     };
@@ -220,9 +263,62 @@ ipcMain.handle('claude:stop', () => {
   send('claude:status', 'done');
 });
 
-// 重置会话（清空上下文）
+// ── 对话管理 IPC ──
+ipcMain.handle('conv:list', () => ({
+  conversations,
+  activeId: activeConvId,
+}));
+
+// 新建对话，返回新对话 id；可选首条消息（用于设标题）
+ipcMain.handle('conv:create', (_e, firstMessage?: string) => {
+  const conv: Conversation = {
+    id: `c-${Date.now()}`,
+    title: firstMessage ? firstMessage.slice(0, 30) : '新对话',
+    sessionId: null,
+    createdAt: Date.now(),
+  };
+  conversations.unshift(conv);
+  activeConvId = conv.id;
+  saveConversations();
+  return conv.id;
+});
+
+// 切换对话
+ipcMain.handle('conv:switch', (_e, id: string) => {
+  if (conversations.some((c) => c.id === id)) {
+    activeConvId = id;
+    return true;
+  }
+  return false;
+});
+
+// 删除对话
+ipcMain.handle('conv:delete', (_e, id: string) => {
+  conversations = conversations.filter((c) => c.id !== id);
+  if (activeConvId === id) activeConvId = conversations[0]?.id ?? null;
+  saveConversations();
+  return { conversations, activeId: activeConvId };
+});
+
+// 重命名对话
+ipcMain.handle('conv:rename', (_e, id: string, title: string) => {
+  const c = conversations.find((c) => c.id === id);
+  if (c) { c.title = title.slice(0, 60); saveConversations(); return true; }
+  return false;
+});
+
+// 兼容旧的 new-chat（建空对话并激活）
 ipcMain.handle('claude:new-chat', () => {
-  sessionId = null;
+  const conv: Conversation = {
+    id: `c-${Date.now()}`,
+    title: '新对话',
+    sessionId: null,
+    createdAt: Date.now(),
+  };
+  conversations.unshift(conv);
+  activeConvId = conv.id;
+  saveConversations();
+  return conv.id;
 });
 
 // 获取可用的命令/技能/代理（跑一次极简查询，从 init 事件抓）

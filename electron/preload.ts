@@ -13,10 +13,25 @@ export interface ClaudeItems {
   agents: string[];
 }
 
+export interface Conversation {
+  id: string;
+  title: string;
+  sessionId: string | null;
+  createdAt: number;
+}
+
+export interface ConvAPI {
+  list: () => Promise<{ conversations: Conversation[]; activeId: string | null }>;
+  create: (firstMessage?: string) => Promise<string>;
+  switch: (id: string) => Promise<boolean>;
+  delete: (id: string) => Promise<{ conversations: Conversation[]; activeId: string | null }>;
+  rename: (id: string, title: string) => Promise<boolean>;
+}
+
 export interface ClaudeAPI {
   ask: (prompt: string) => Promise<void>;
   stop: () => Promise<void>;
-  newChat: () => Promise<void>;
+  newChat: () => Promise<string>;
   onChunk: (cb: (text: string) => void) => void;
   onStatus: (cb: (status: string) => void) => void;
   onError: (cb: (msg: string) => void) => void;
@@ -26,6 +41,8 @@ export interface ClaudeAPI {
   pickDirectory: () => Promise<string | null>;
   // 命令/技能/代理
   getCommands: () => Promise<ClaudeItems>;
+  // 对话管理
+  conv: ConvAPI;
 }
 
 contextBridge.exposeInMainWorld('claude', {
@@ -42,4 +59,11 @@ contextBridge.exposeInMainWorld('claude', {
   setWorkspace: (dir: string) => ipcRenderer.invoke('claude:set-workspace', dir),
   pickDirectory: () => ipcRenderer.invoke('claude:pick-directory'),
   getCommands: () => ipcRenderer.invoke('claude:get-commands'),
+  conv: {
+    list: () => ipcRenderer.invoke('conv:list'),
+    create: (firstMessage?: string) => ipcRenderer.invoke('conv:create', firstMessage),
+    switch: (id: string) => ipcRenderer.invoke('conv:switch', id),
+    delete: (id: string) => ipcRenderer.invoke('conv:delete', id),
+    rename: (id: string, title: string) => ipcRenderer.invoke('conv:rename', id, title),
+  },
 } satisfies ClaudeAPI);
