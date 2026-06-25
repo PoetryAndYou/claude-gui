@@ -7,6 +7,12 @@ import { contextBridge, ipcRenderer } from 'electron';
 // - onChunk: 订阅 claude 的增量文字
 // - onStatus: 订阅状态变化（thinking/done/error）
 // - onError: 订阅错误
+export interface ClaudeItems {
+  commands: string[];
+  skills: string[];
+  agents: string[];
+}
+
 export interface ClaudeAPI {
   ask: (prompt: string) => Promise<void>;
   stop: () => Promise<void>;
@@ -18,8 +24,8 @@ export interface ClaudeAPI {
   getWorkspace: () => Promise<string>;
   setWorkspace: (dir: string) => Promise<string>;
   pickDirectory: () => Promise<string | null>;
-  // 命令列表
-  getCommands: () => Promise<string[]>;
+  // 命令/技能/代理
+  getCommands: () => Promise<ClaudeItems>;
 }
 
 contextBridge.exposeInMainWorld('claude', {

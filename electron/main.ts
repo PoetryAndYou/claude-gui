@@ -225,30 +225,38 @@ ipcMain.handle('claude:new-chat', () => {
   sessionId = null;
 });
 
-// 获取可用的 slash commands（跑一次极简查询，从 init 事件抓）
+// 获取可用的命令/技能/代理（跑一次极简查询，从 init 事件抓）
+interface ClaudeItems {
+  commands: string[];
+  skills: string[];
+  agents: string[];
+}
 ipcMain.handle('claude:get-commands', () => {
-  return new Promise<string[]>((resolve) => {
+  return new Promise<ClaudeItems>((resolve) => {
     const claudeBin = findClaude();
     const args = ['-p', ' ', '--output-format', 'stream-json', '--verbose', '--max-turns', '1'];
     const proc = spawn(claudeBin, args, { cwd: workspace, env: process.env, shell: process.platform === 'win32' });
     let collected = '';
     const collect = (chunk: Buffer) => {
       collected += chunk.toString('utf8');
-      // 找 init 事件，里面有 slash_commands
       for (const line of collected.split(/\r?\n/)) {
         try {
           const obj = JSON.parse(line.trim());
-          if (obj.type === 'system' && obj.subtype === 'init' && Array.isArray(obj.slash_commands)) {
+          if (obj.type === 'system' && obj.subtype === 'init') {
             proc.kill();
-            resolve(obj.slash_commands as string[]);
+            resolve({
+              commands: Array.isArray(obj.slash_commands) ? obj.slash_commands : [],
+              skills: Array.isArray(obj.skills) ? obj.skills : [],
+              agents: Array.isArray(obj.agents) ? obj.agents : [],
+            });
             return;
           }
         } catch (_) {}
       }
     };
     proc.stdout.on('data', collect);
-    proc.on('close', () => resolve([]));
-    setTimeout(() => { try { proc.kill(); } catch (_) {} resolve([]); }, 8000); // 超时保护
+    proc.on('close', () => resolve({ commands: [], skills: [], agents: [] }));
+    setTimeout(() => { try { proc.kill(); } catch (_) {} resolve({ commands: [], skills: [], agents: [] }); }, 8000);
   });
 });
 
