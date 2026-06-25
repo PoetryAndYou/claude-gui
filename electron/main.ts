@@ -154,54 +154,56 @@ ipcMain.handle('claude:pick-directory', async () => {
 // 启动一次 claude 对话
 ipcMain.handle('claude:ask', (_e, prompt: string) => {
   return new Promise<void>((resolve) => {
-    const sid = currentSessionId();
-    const args = ['-p', prompt, '--output-format', 'stream-json', '--verbose'];
-    if (sid) {
-      args.unshift('--resume', sid);
-    }
+    let retried = false;  // resume 失败只重试一次
 
-    const claudeBin = findClaude();
-    send('claude:status', 'thinking');
-
-    let buffer = '';
-
-    try {
-      currentProc = spawn(claudeBin, args, {
-        cwd: workspace,           // 用用户设的工作空间
-        env: process.env,
-        shell: process.platform === 'win32', // Windows 需要 shell 找 .cmd
-      });
-    } catch (e) {
-      send('claude:error', `无法启动 claude: ${(e as Error).message}`);
-      send('claude:status', 'error');
-      resolve();
-      return;
-    }
-
-    const onLine = (line: string) => {
-      const trimmed = line.trim();
-      if (!trimmed) return;
-      let obj: any;
-      try { obj = JSON.parse(trimmed); } catch (_) { return; } // 非 JSON 行忽略
-
-      // 捕获 session_id（存到当前激活对话，用于后续 --resume）
-      if (obj.type === 'system' && obj.subtype === 'init' && obj.session_id) {
-        const c = conversations.find((c) => c.id === activeConvId);
-        if (c) { c.sessionId = obj.session_id; saveConversations(); }
+    const runOnce = (useResume: boolean) => {
+      const sid = currentSessionId();
+      const args = ['-p', prompt, '--output-format', 'stream-json', '--verbose'];
+      if (useResume && sid) {
+        args.unshift('--resume', sid);
       }
 
-      // API 限流重试：通知前端，避免用户以为卡死
-      if (obj.type === 'system' && obj.subtype === 'api_retry') {
-        send('claude:chunk', `\n⏳ 请求繁忙，重试中 (${obj.attempt}/${obj.max_retries})…\n`);
+      const claudeBin = findClaude();
+      send('claude:status', 'thinking');
+      let buffer = '';
+
+      try {
+        currentProc = spawn(claudeBin, args, {
+          cwd: workspace,
+          env: process.env,
+          shell: process.platform === 'win32',
+        });
+      } catch (e) {
+        send('claude:error', `无法启动 claude: ${(e as Error).message}`);
+        send('claude:status', 'error');
+        resolve();
+        return;
       }
 
-      // 流式增量文字（最常见的实时输出）
-      if (obj.type === 'stream_event' && obj.event?.type === 'content_block_delta') {
-        const text = obj.event?.delta?.text;
-        if (text) send('claude:chunk', text);
-      }
-      // 助手完整消息块（非流式回退）
-      else if (obj.type === 'assistant' && Array.isArray(obj.message?.content)) {
+      const onLine = (line: string) => {
+        const trimmed = line.trim();
+        if (!trimmed) return;
+        let obj: any;
+        try { obj = JSON.parse(trimmed); } catch (_) { return; }
+
+        // 捕获 session_id
+        if (obj.type === 'system' && obj.subtype === 'init' && obj.session_id) {
+          const c = conversations.find((c) => c.id === activeConvId);
+          if (c) { c.sessionId = obj.session_id; saveConversations(); }
+        }
+
+        // API 限流重试
+        if (obj.type === 'system' && obj.subtype === 'api_retry') {
+          send('claude:chunk', `\n⏳ 请求繁忙，重试中 (${obj.attempt}/${obj.max_retries})…\n`);
+        }
+
+        // 流式增量
+        if (obj.type === 'stream_event' && obj.event?.type === 'content_block_delta') {
+          const text = obj.event?.delta?.text;
+          if (text) send('claude:chunk', text);
+        }
+        // 助手完整消息
+        else if (obj.type === 'assistant' && Array.isArray(obj.message?.content)) {
         for (const block of obj.message.content) {
           if (block.type === 'text' && block.text) send('claude:chunk', block.text);
           if (block.type === 'tool_use') {
@@ -211,6 +213,24 @@ ipcMain.handle('claude:ask', (_e, prompt: string) => {
       }
       // 最终结果
       else if (obj.type === 'result') {
+        // 检测 --resume 失败（session 不存在）：自动降级重试一次（不带 resume）
+        if (
+          obj.is_error &&
+          useResume &&
+          !retried &&
+          Array.isArray(obj.errors) &&
+          obj.errors.some((e: string) => /not a UUID|does not match|No conversation/i.test(e))
+        ) {
+          retried = true;
+          // 清掉失效的 sessionId，避免后续继续用
+          const c = conversations.find((c) => c.id === activeConvId);
+          if (c) { c.sessionId = null; saveConversations(); }
+          try { if (currentProc) currentProc.kill(); } catch (_) {}
+          send('claude:chunk', '\n（会话已失效，重新发起…）\n');
+          // 延迟一点再重试，避免端口/进程冲突
+          setTimeout(() => runOnce(false), 200);
+          return;
+        }
         if (obj.session_id) {
           const c = conversations.find((c) => c.id === activeConvId);
           if (c) { c.sessionId = obj.session_id; saveConversations(); }
@@ -221,7 +241,6 @@ ipcMain.handle('claude:ask', (_e, prompt: string) => {
 
     currentProc.stdout.on('data', (chunk: Buffer) => {
       buffer += chunk.toString('utf8');
-      // 按行切分（最后一行可能不完整，留在 buffer）
       const lines = buffer.split(/\r?\n/);
       buffer = lines.pop() || '';
       for (const line of lines) onLine(line);
@@ -242,16 +261,20 @@ ipcMain.handle('claude:ask', (_e, prompt: string) => {
     });
 
     currentProc.on('close', (code) => {
-      // 处理 buffer 里残留的最后一行
       if (buffer.trim()) onLine(buffer);
-      if (code !== 0 && stderrBuf.trim()) {
+      // close 时若已经触发了重试，就不 resolve（让重试的 runOnce 继续）
+      if (retried) { resolve(); return; }
+      if (code !== 0 && stderrBuf.trim() && !retried) {
         send('claude:error', stderrBuf.trim());
       }
-      // 进程结束时若状态还是 thinking，说明没收到 result 事件，补一个 done
       send('claude:status', 'done');
       currentProc = null;
       resolve();
     });
+  };
+
+    // 启动首次执行（带 --resume，失败会自动降级）
+    runOnce(true);
   });
 });
 
