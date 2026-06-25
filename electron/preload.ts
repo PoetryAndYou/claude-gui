@@ -17,6 +17,7 @@ export interface Conversation {
   id: string;
   title: string;
   sessionId: string | null;
+  workspace: string;
   createdAt: number;
 }
 

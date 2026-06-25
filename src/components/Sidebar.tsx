@@ -28,9 +28,10 @@ export function Sidebar({
     commands: false, skills: false, agents: false,
   });
 
+  // 工作空间随对话切换变化（每个对话绑定自己的工作目录）
   useEffect(() => {
     window.claude.getWorkspace().then(setWorkspace);
-  }, []);
+  }, [activeConvId]);
 
   const pickDir = async () => {
     const dir = await window.claude.pickDirectory();

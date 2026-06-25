@@ -85,18 +85,32 @@ function findClaude(): string {
 }
 
 // ──────────────────────────────────────────────
-// 对话管理：多对话，每个对话 {id, title, sessionId, createdAt}
-// 持久化到 userData/conversations.json，切换对话 = 切换 activeId + sessionId
+// 对话管理：多对话，每个对话 {id, title, sessionId, workspace, createdAt}
+// workspace = 该对话绑定的项目目录（claude 在此 cwd 执行），持久化
 // ──────────────────────────────────────────────
 interface Conversation {
   id: string;            // GUI 内部 id
   title: string;         // 显示名（取首条消息）
   sessionId: string | null;  // claude 的 session_id（用于 --resume）
+  workspace: string;     // 该对话的工作目录
   createdAt: number;
 }
 
 let conversations: Conversation[] = [];
 let activeConvId: string | null = null;
+
+// 当前激活对话的工作目录（spawn/listFiles 等都用它）
+function currentWorkspace(): string {
+  const c = conversations.find((c) => c.id === activeConvId);
+  return c?.workspace || require('os').homedir();
+}
+
+// 兼容旧的全局 workspace 引用（现在都改成 currentWorkspace()，但部分函数仍引用此变量）
+let workspace: string = require('os').homedir();
+// 同步 workspace 到当前对话（每次用到前调一下）
+function syncWorkspace() {
+  workspace = currentWorkspace();
+}
 
 function convStorePath(): string {
   const dir = require('path').join(app.getPath('userData'), 'claude-gui-data');
@@ -108,6 +122,9 @@ function loadConversations() {
   try {
     conversations = JSON.parse(require('fs').readFileSync(convStorePath(), 'utf8'));
   } catch (_) { conversations = []; }
+  // 向后兼容：老对话没有 workspace 字段，补默认值
+  const home = require('os').homedir();
+  conversations.forEach((c) => { if (!c.workspace) c.workspace = home; });
 }
 
 function saveConversations() {
@@ -138,19 +155,21 @@ function sendConv(convId: string | null, channel: string, ...args: unknown[]) {
 }
 
 // 当前工作空间目录（用户可改）
-let workspace: string = require('os').homedir();
-
 ipcMain.handle('claude:set-workspace', (_e, dir: string) => {
-  workspace = dir || require('os').homedir();
-  return workspace;
+  // 设置当前激活对话的工作目录
+  const c = conversations.find((c) => c.id === activeConvId);
+  if (c) { c.workspace = dir || require('os').homedir(); saveConversations(); }
+  return currentWorkspace();
 });
-ipcMain.handle('claude:get-workspace', () => workspace);
+ipcMain.handle('claude:get-workspace', () => currentWorkspace());
 ipcMain.handle('claude:pick-directory', async () => {
   const { dialog } = require('electron');
   const result = await dialog.showOpenDialog({ properties: ['openDirectory'] });
   if (!result.canceled && result.filePaths.length) {
-    workspace = result.filePaths[0];
-    return workspace;
+    const dir = result.filePaths[0];
+    const c = conversations.find((c) => c.id === activeConvId);
+    if (c) { c.workspace = dir; saveConversations(); }
+    return currentWorkspace();
   }
   return null;
 });
@@ -163,6 +182,7 @@ ipcMain.handle('claude:ask', (_e, prompt: string) => {
     const genConvId = activeConvId;
 
     const runOnce = (useResume: boolean) => {
+      syncWorkspace();  // 用当前对话的工作目录
       const sid = currentSessionId();
       const args = ['-p', prompt, '--output-format', 'stream-json', '--verbose'];
       if (useResume && sid) {
@@ -299,10 +319,13 @@ ipcMain.handle('conv:list', () => ({
 
 // 新建对话，返回新对话 id；可选首条消息（用于设标题）
 ipcMain.handle('conv:create', (_e, firstMessage?: string) => {
+  // 新对话继承上一个激活对话的工作目录（或主目录）
+  const inheritedWs = currentWorkspace();
   const conv: Conversation = {
     id: `c-${Date.now()}`,
     title: firstMessage ? firstMessage.slice(0, 30) : '新对话',
     sessionId: null,
+    workspace: inheritedWs,
     createdAt: Date.now(),
   };
   conversations.unshift(conv);
@@ -337,10 +360,12 @@ ipcMain.handle('conv:rename', (_e, id: string, title: string) => {
 
 // 兼容旧的 new-chat（建空对话并激活）
 ipcMain.handle('claude:new-chat', () => {
+  const inheritedWs = currentWorkspace();
   const conv: Conversation = {
     id: `c-${Date.now()}`,
     title: '新对话',
     sessionId: null,
+    workspace: inheritedWs,
     createdAt: Date.now(),
   };
   conversations.unshift(conv);
@@ -361,11 +386,12 @@ export interface ClaudeItems {
 }
 
 // skill 列表：纯文件扫描，即时返回（不依赖 claude 进程）
-ipcMain.handle('claude:get-skills', () => scanSkills());
+ipcMain.handle('claude:get-skills', () => { syncWorkspace(); return scanSkills(); });
 
 // 文件列表：@ 提及用，扫描工作空间下的文件/目录
 ipcMain.handle('claude:list-files', (_e, query: string) => {
   try {
+    syncWorkspace();
     const q = (query || '').trim();
     // 从工作空间根扫描，拼相对路径
     let cmd = `find "${workspace}" -maxdepth 3 -not -path '*/node_modules/*' -not -path '*/.git/*' -not -path '*/dist/*' 2>/dev/null | head -200`;
@@ -392,6 +418,7 @@ ipcMain.handle('claude:list-files', (_e, query: string) => {
 // 加载历史消息：从 claude session jsonl 文件解析对话历史
 ipcMain.handle('claude:load-history', (_e, sessionId: string) => {
   if (!sessionId) return [];
+  syncWorkspace();
   const home = require('os').homedir();
   // session 文件在 ~/.claude/projects/<编码cwd>/<session>.jsonl，cwd 的 / 替换成 -
   const encodedCwd = workspace.replace(/\//g, '-');
@@ -435,6 +462,7 @@ ipcMain.handle('claude:load-history', (_e, sessionId: string) => {
 });
 
 ipcMain.handle('claude:get-commands', () => {
+  syncWorkspace();
   return new Promise<ClaudeItems>((resolve) => {
     const claudeBin = findClaude();
     const args = ['-p', ' ', '--output-format', 'stream-json', '--verbose', '--max-turns', '1'];
