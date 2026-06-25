@@ -35,10 +35,44 @@ export function useClaude() {
 
   // 每个对话独立的 streaming 状态（切换不打断）
   const streamingIds = useRef<Record<string, string>>({});
+  // 每个 convId 待 flush 的 chunk 缓冲（累积一帧内的所有 delta，一次 setState）
+  const chunkBuf = useRef<Record<string, string>>({});
+  const flushRaf = useRef<number | null>(null);
   const activeIdRef = useRef(activeId);
   useEffect(() => { activeIdRef.current = activeId; }, [activeId]);
   const convListRef = useRef(convList);
   useEffect(() => { convListRef.current = convList; }, [convList]);
+
+  // 用 requestAnimationFrame 节流：把一帧内到达的所有 chunk 合并成一次 setState，
+  // 避免每个 delta(2~3字符)都触发一次 markdown 重渲染导致卡顿/整段蹦出
+  const scheduleFlush = useCallback(() => {
+    if (flushRaf.current != null) return;
+    flushRaf.current = requestAnimationFrame(() => {
+      flushRaf.current = null;
+      setConvs((prev) => {
+        let changed = false;
+        const next = { ...prev };
+        for (const [cid, pending] of Object.entries(chunkBuf.current)) {
+          if (!pending) continue;
+          const c = next[cid];
+          if (!c) { continue; }
+          const sid = streamingIds.current[cid];
+          if (!sid) { delete chunkBuf.current[cid]; continue; }
+          changed = true;
+          const msg = c.messages.find((m) => m.id === sid);
+          if (!msg) { delete chunkBuf.current[cid]; continue; }
+          next[cid] = {
+            ...c,
+            messages: c.messages.map((m) =>
+              m.id === sid ? { ...m, content: (m.content || '') + pending } : m
+            ),
+          };
+          delete chunkBuf.current[cid];
+        }
+        return changed ? next : prev;
+      });
+    });
+  }, []);
 
   // 初始化：加载已有对话
   useEffect(() => {
@@ -59,18 +93,9 @@ export function useClaude() {
     api.onChunk((convId, text) => {
       const sid = streamingIds.current[convId];
       if (!sid) return;
-      setConvs((prev) => {
-        const c = prev[convId];
-        if (!c) return prev;
-        return {
-          ...prev,
-          [convId]: {
-            messages: c.messages.map((m) =>
-              m.id === sid ? { ...m, content: m.content + text } : m
-            ),
-          },
-        };
-      });
+      // 累积到缓冲，由 rAF 周期统一 flush（顺滑、不卡顿）
+      chunkBuf.current[convId] = (chunkBuf.current[convId] || '') + text;
+      scheduleFlush();
     });
     api.onStatus((convId, s) => {
       if (s === 'thinking') {
@@ -86,7 +111,27 @@ export function useClaude() {
           };
         });
       } else if (s === 'done' || s === 'error') {
+        // 完成时立即 flush 残留的 buffer（cancel rAF 换成同步 flush，避免最后一段丢/延迟）
+        if (flushRaf.current != null) {
+          cancelAnimationFrame(flushRaf.current);
+          flushRaf.current = null;
+        }
+        const pending = chunkBuf.current[convId];
+        delete chunkBuf.current[convId];
         delete streamingIds.current[convId];
+        if (pending) {
+          setConvs((prev) => {
+            const c = prev[convId];
+            if (!c) return prev;
+            // 此时 streamingIds 已删，用最后一条 assistant 消息兜底
+            const last = c.messages[c.messages.length - 1];
+            if (!last || last.role !== 'assistant') return prev;
+            return {
+              ...prev,
+              [convId]: { messages: c.messages.map((m) => m.id === last.id ? { ...m, content: (m.content || '') + pending } : m) },
+            };
+          });
+        }
         if (convId === activeIdRef.current) {
           setStatus(s === 'done' ? 'idle' : 'error');
         }

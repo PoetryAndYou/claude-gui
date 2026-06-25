@@ -54,6 +54,24 @@ function CodeBlock({ language, children, theme }: { language: string; children: 
     </div>
   );
 }
+
+// 加载动画：三个错峰跳动的圆点（思考中状态）
+function ThreeDotsSpinner() {
+  return (
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 0' }}>
+      {[0, 1, 2].map((i) => (
+        <span
+          key={i}
+          style={{
+            width: 7, height: 7, borderRadius: '50%', background: 'var(--accent)',
+            display: 'inline-block',
+            animation: `dotBounce 1.2s ${i * 0.18}s ease-in-out infinite`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
 const copyBtnStyle: React.CSSProperties = {
   position: 'absolute', top: 6, right: 6, zIndex: 2,
   display: 'flex', alignItems: 'center', gap: 4,
@@ -161,8 +179,12 @@ export function MessageBubble({
                 },
               }}
             >
-              {message.content || (streaming && (!message.events || message.events.length === 0) ? '思考中…' : '')}
+              {message.content}
             </ReactMarkdown>
+            {/* 思考中且尚无文字/过程时：显示旋转加载动画（取代生硬的"思考中…"文字） */}
+            {streaming && !message.content && (!message.events || message.events.length === 0) && (
+              <ThreeDotsSpinner />
+            )}
             {streaming && message.content && (
               <span className="cursor-blink">▋</span>
             )}
