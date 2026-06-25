@@ -437,6 +437,11 @@ ipcMain.handle('claude:list-files', (_e, query: string) => {
       let isDir = false;
       try { isDir = fs.statSync(p).isDirectory(); } catch (_) {}
       return { name, path: rel, isDir };
+    }).filter((e) => e.path !== '');  // 去掉工作空间根目录本身（rel 为空）
+    // 目录优先，再按路径字母序
+    entries.sort((a, b) => {
+      if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+      return a.path.localeCompare(b.path);
     });
     // 按 query 过滤
     if (q) {

@@ -119,7 +119,8 @@ export function InputBox({
 
   const acceptAt = (entry: FileEntry) => {
     const before = text.slice(0, atAnchor.current);
-    setText(before + entry.name + ' ');
+    // 用相对路径（而非仅文件名），让 claude 能定位到文件，同名文件也不混淆
+    setText(before + entry.path + ' ');
     setAtOpen(false);
     focusTextarea();
   };
@@ -132,11 +133,12 @@ export function InputBox({
       if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) { e.preventDefault(); acceptSlash(filtered[slashIdx] || filtered[0]); return; }
       if (e.key === 'Escape') { e.preventDefault(); setSlashOpen(false); return; }
     }
-    // @ 补全导航
+    // @ 补全导航（循环范围 = 实际显示的条数，与菜单一致）
     if (atOpen && atFiles.length > 0) {
-      if (e.key === 'ArrowDown') { e.preventDefault(); setAtIdx((i) => (i + 1) % atFiles.length); return; }
-      if (e.key === 'ArrowUp') { e.preventDefault(); setAtIdx((i) => (i - 1 + atFiles.length) % atFiles.length); return; }
-      if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) { e.preventDefault(); acceptAt(atFiles[atIdx]); return; }
+      const max = Math.min(atFiles.length, 20);
+      if (e.key === 'ArrowDown') { e.preventDefault(); setAtIdx((i) => (i + 1) % max); return; }
+      if (e.key === 'ArrowUp') { e.preventDefault(); setAtIdx((i) => (i - 1 + max) % max); return; }
+      if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) { e.preventDefault(); acceptAt(atFiles[Math.min(atIdx, max - 1)]); return; }
       if (e.key === 'Escape') { e.preventDefault(); setAtOpen(false); return; }
     }
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -212,23 +214,13 @@ export function InputBox({
 
       {/* @ 文件补全菜单 */}
       {showAt && (
-        <div style={slashMenuStyle}>
-          {atLoading ? (
-            <div style={{ padding: '10px 14px', fontSize: 13, color: 'var(--text-faint)' }}>扫描中…</div>
-          ) : atFiles.length === 0 ? (
-            <div style={{ padding: '10px 14px', fontSize: 13, color: 'var(--text-faint)' }}>无匹配文件</div>
-          ) : (
-            atFiles.slice(0, 10).map((f, i) => (
-              <div key={f.path} onMouseDown={(e) => { e.preventDefault(); acceptAt(f); }} onMouseEnter={() => setAtIdx(i)} style={slashItemStyle(i === atIdx)}>
-                <span style={{ marginRight: 8, display: 'inline-flex', verticalAlign: 'middle' }}>
-                  <Icon name={f.isDir ? 'folder' : 'file'} size={14} color={i === atIdx ? '#fff' : 'var(--text-muted)'} />
-                </span>
-                <span style={{ fontWeight: 500 }}>{f.name}</span>
-                <span style={{ color: i === atIdx ? 'rgba(255,255,255,.5)' : 'var(--text-faint)', fontSize: 11, marginLeft: 8 }}>{f.path}</span>
-              </div>
-            ))
-          )}
-        </div>
+        <AtMenu
+          files={atFiles}
+          loading={atLoading}
+          idx={atIdx}
+          onPick={acceptAt}
+          onHover={setAtIdx}
+        />
       )}
 
       <div style={{ maxWidth: 880, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 0 }}>
@@ -326,6 +318,45 @@ function kindBadge(kind: string): React.CSSProperties {
     fontSize: 10, padding: '1px 5px', borderRadius: 3, fontWeight: 600,
     background: `${c}33`, color: c,
   };
+}
+
+// @ 文件补全菜单：渲染全部候选（最多 20 条，超出提示），选中项联动滚动
+function AtMenu({ files, loading, idx, onPick, onHover }: {
+  files: FileEntry[]; loading: boolean; idx: number;
+  onPick: (e: FileEntry) => void; onHover: (i: number) => void;
+}) {
+  const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
+  useEffect(() => {
+    const el = itemRefs.current[idx];
+    if (el) el.scrollIntoView({ block: 'nearest' });
+  }, [idx]);
+
+  if (loading) {
+    return <div style={{ ...slashMenuStyle, padding: '10px 14px', fontSize: 13, color: 'var(--text-faint)' }}>扫描中…</div>;
+  }
+  if (files.length === 0) {
+    return <div style={{ ...slashMenuStyle, padding: '10px 14px', fontSize: 13, color: 'var(--text-faint)' }}>无匹配文件</div>;
+  }
+
+  const shown = files.slice(0, 20);
+  return (
+    <div style={{ ...slashMenuStyle, left: 'max(20px, calc((100% - 880px) / 2 + 20px))', right: 'max(20px, calc((100% - 880px) / 2 + 132px))' }}>
+      {shown.map((f, i) => (
+        <div
+          key={f.path}
+          ref={(el) => { itemRefs.current[i] = el; }}
+          onMouseDown={(e) => { e.preventDefault(); onPick(f); }}
+          onMouseEnter={() => onHover(i)}
+          style={{ ...slashItemStyle(i === idx), display: 'flex', alignItems: 'center', gap: 8 }}
+        >
+          <Icon name={f.isDir ? 'folder' : 'file'} size={14} color={i === idx ? '#fff' : 'var(--text-muted)'} />
+          {/* 主标签：相对路径（claude 用它定位文件） */}
+          <span style={{ fontWeight: 500 }}>{f.path}</span>
+        </div>
+      ))}
+      {files.length > 20 && <div style={{ padding: '4px 12px', fontSize: 11, color: 'var(--text-fainter)' }}>还有 {files.length - 20} 项，继续输入以筛选…</div>}
+    </div>
+  );
 }
 
 function SendIcon() {
