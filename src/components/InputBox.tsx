@@ -27,13 +27,21 @@ export function InputBox({
   const [slashIdx, setSlashIdx] = useState(0);
   const slashAnchor = useRef<number>(-1); // 输入框里 / 的位置
 
-  // 合并所有命令（前置 / ）
-  const allCmds = useMemo(() => {
-    const list: string[] = [];
-    commands.commands.forEach((c) => list.push('/' + c));
-    commands.skills.forEach((c) => list.push('/' + c));
-    commands.agents.forEach((c) => list.push('/' + c));
-    return [...new Set(list)];
+  // 合并所有命令（前置 /），带描述
+  interface CmdEntry { cmd: string; desc?: string; kind: '命令' | '技能' | '代理'; }
+  const allCmds = useMemo<CmdEntry[]>(() => {
+    const list: CmdEntry[] = [];
+    const seen = new Set<string>();
+    const add = (name: string, desc: string | undefined, kind: CmdEntry['kind']) => {
+      const cmd = '/' + name;
+      if (seen.has(cmd)) return;
+      seen.add(cmd);
+      list.push({ cmd, desc, kind });
+    };
+    commands.commands.forEach((c) => add(c, undefined, '命令'));
+    commands.skills.forEach((c) => add(c.name, c.description, '技能'));
+    commands.agents.forEach((c) => add(c, undefined, '代理'));
+    return list;
   }, [commands]);
 
   // 当前输入的 / 词，用于过滤
@@ -46,7 +54,8 @@ export function InputBox({
 
   const filtered = useMemo(() => {
     if (!slashQuery) return allCmds;
-    return allCmds.filter((c) => c.toLowerCase().includes(slashQuery));
+    const q = slashQuery;
+    return allCmds.filter((c) => c.cmd.toLowerCase().includes(q) || (c.desc && c.desc.toLowerCase().includes(q)));
   }, [allCmds, slashQuery]);
 
   // 注册外部 setter
@@ -77,9 +86,9 @@ export function InputBox({
   };
 
   // 接受选中的命令（替换输入框里的 /词）
-  const acceptSlash = (cmd: string) => {
+  const acceptSlash = (entry: CmdEntry) => {
     const before = text.slice(0, slashAnchor.current);
-    setText(before + cmd + ' ');
+    setText(before + entry.cmd + ' ');
     setSlashOpen(false);
   };
 
@@ -140,13 +149,26 @@ export function InputBox({
       {/* slash 命令补全菜单 */}
       {slashOpen && filtered.length > 0 && (
         <div style={slashMenuStyle}>
-          {filtered.slice(0, 8).map((cmd, i) => (
+          {filtered.slice(0, 8).map((entry, i) => (
             <div
-              key={cmd}
-              onMouseDown={(e) => { e.preventDefault(); acceptSlash(cmd); }}
+              key={entry.cmd}
+              onMouseDown={(e) => { e.preventDefault(); acceptSlash(entry); }}
+              onMouseEnter={() => setSlashIdx(i)}
               style={slashItemStyle(i === slashIdx)}
             >
-              {cmd}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{
+                  fontSize: 10, padding: '1px 5px', borderRadius: 3, fontWeight: 600,
+                  background: entry.kind === '技能' ? 'rgba(163,113,247,.2)' : entry.kind === '代理' ? 'rgba(63,185,80,.2)' : 'rgba(88,166,255,.2)',
+                  color: entry.kind === '技能' ? '#bc8cff' : entry.kind === '代理' ? '#3fb950' : '#58a6ff',
+                }}>{entry.kind}</span>
+                <span style={{ fontWeight: 600 }}>{entry.cmd}</span>
+              </div>
+              {entry.desc && (
+                <div style={{ fontSize: 11, color: i === slashIdx ? 'rgba(255,255,255,.7)' : '#6e7681', marginTop: 2, paddingLeft: 32 }}>
+                  {entry.desc}
+                </div>
+              )}
             </div>
           ))}
           {filtered.length > 8 && (
@@ -214,5 +236,6 @@ function slashItemStyle(active: boolean): React.CSSProperties {
     padding: '8px 12px', fontSize: 13, cursor: 'pointer',
     background: active ? '#1f6feb' : 'transparent',
     color: active ? '#fff' : '#c9d1d9',
+    lineHeight: 1.4,
   };
 }

@@ -9,7 +9,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 // - onError: 订阅错误
 export interface ClaudeItems {
   commands: string[];
-  skills: string[];
+  skills: { name: string; description?: string }[];
   agents: string[];
 }
 

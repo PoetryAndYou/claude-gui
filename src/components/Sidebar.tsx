@@ -99,9 +99,10 @@ export function Sidebar({
             title="技能" icon="★" count={items.skills.length}
             collapsed={collapsed.skills}
             onToggle={() => toggle('skills')}
-            renderItem={(c) => (
-              <button key={c} onClick={() => onPickCommand('/' + c)} style={itemStyle}>
-                {c}
+            renderItem={(s) => (
+              <button key={s.name} onClick={() => onPickCommand('/' + s.name)} style={itemStyle} title={s.description}>
+                <div style={{ fontWeight: 500 }}>{s.name}</div>
+                {s.description && <div style={{ fontSize: 10, color: '#6e7681', marginTop: 1 }}>{s.description}</div>}
               </button>
             )}
             items={items.skills}
@@ -166,7 +167,8 @@ const groupHeaderStyle: React.CSSProperties = {
   padding: '6px 4px', fontSize: 12, fontWeight: 500, cursor: 'pointer',
 };
 const itemStyle: React.CSSProperties = {
-  textAlign: 'left', background: 'transparent', border: 'none',
+  display: 'block', textAlign: 'left', background: 'transparent', border: 'none',
   color: '#8b949e', padding: '5px 10px', borderRadius: 4,
-  fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
+  fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', width: '100%',
+  lineHeight: 1.4, whiteSpace: 'normal',
 };
