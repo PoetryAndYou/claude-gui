@@ -13,13 +13,7 @@
     "build:win": "npm run build && electron-builder --win",
     "postinstall": "electron-builder install-app-deps"
   },
-  "dependencies": {
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-markdown": "^9.0.1",
-    "remark-gfm": "^4.0.0",
-    "react-syntax-highlighter": "^15.6.1"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
@@ -27,6 +21,11 @@
     "@vitejs/plugin-react": "^4.3.4",
     "electron": "^33.0.0",
     "electron-builder": "^25.1.8",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-markdown": "^9.0.1",
+    "react-syntax-highlighter": "^15.6.1",
+    "remark-gfm": "^4.0.0",
     "typescript": "^5.6.3",
     "vite": "^5.4.11",
     "vite-plugin-electron": "^0.28.8",
