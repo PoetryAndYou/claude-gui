@@ -88,7 +88,11 @@ export function InputBox({
 
   const submit = () => {
     const trimmed = text.trim();
-    if (!trimmed || isThinking) return;
+    if (!trimmed) return;
+    if (isThinking) {
+      // 思考中：不立即发送（会与当前回复冲突），但保留输入内容作草稿
+      return;
+    }
     onSend(trimmed);
     setText('');
     setSlashOpen(false);
@@ -202,30 +206,28 @@ export function InputBox({
         </div>
       )}
 
-      <div style={{ maxWidth: 880, margin: '0 auto', display: 'flex', gap: 12, alignItems: 'stretch', position: 'relative' }}>
+      <div style={{ maxWidth: 880, margin: '0 auto', display: 'flex', gap: 10, alignItems: 'stretch', position: 'relative' }}>
         <textarea
           ref={textareaRef}
           value={text}
           onChange={onChange}
           onKeyDown={onKeyDown}
           rows={2}
-          placeholder={isThinking ? 'claude 正在回复…' : '给 claude 发送消息 / 命令 · @ 文件 · Shift+Enter 换行'}
+          placeholder="给 claude 发送消息 / 命令 · @ 文件 · Shift+Enter 换行"
           style={textareaStyle}
           onFocus={(e) => { e.target.style.borderColor = '#58a6ff'; e.target.style.boxShadow = '0 0 0 3px rgba(88,166,255,.15)'; }}
           onBlur={(e) => { e.target.style.borderColor = '#30363d'; e.target.style.boxShadow = 'none'; }}
-          disabled={isThinking}
         />
-        {isThinking ? (
-          <button onClick={onStop} style={stopBtnStyle}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <span style={spinnerStyle} /> 停止
-            </span>
-          </button>
-        ) : (
-          <button onClick={submit} disabled={!text.trim()} style={sendBtnStyle(!text.trim())}>
-            <SendIcon /> 发送
+        {/* 停止按钮：思考中显示 */}
+        {isThinking && (
+          <button onClick={onStop} style={stopBtnStyle} title="停止生成">
+            <span style={spinnerStyle} /> 停止
           </button>
         )}
+        {/* 发送按钮：朴素风格，一直显示，无内容时禁用 */}
+        <button onClick={submit} disabled={!text.trim()} style={sendBtnStyle(!text.trim())}>
+          发送
+        </button>
       </div>
     </div>
   );
@@ -296,23 +298,23 @@ const textareaStyle: React.CSSProperties = {
   minHeight: 56, maxHeight: 220, transition: 'border-color .15s, box-shadow .15s',
 };
 
-// 发送按钮：渐变蓝 + 图标 + 悬停高亮
+// 发送按钮：朴素边框风格
 function sendBtnStyle(disabled: boolean): React.CSSProperties {
   return {
-    flex: '0 0 auto', padding: '0 24px', border: 'none', borderRadius: 14,
-    background: disabled ? '#21262d' : 'linear-gradient(135deg, #2f81f7, #1f6feb)',
+    flex: '0 0 auto', padding: '0 22px', border: '1px solid', borderRadius: 14,
+    borderColor: disabled ? '#30363d' : '#2f81f7',
+    background: disabled ? 'transparent' : '#1f6feb',
     color: disabled ? '#484f58' : '#fff',
-    fontSize: 14, fontWeight: 600, cursor: disabled ? 'not-allowed' : 'pointer',
-    minHeight: 56, display: 'flex', alignItems: 'center', gap: 6,
-    transition: 'all .15s', boxShadow: disabled ? 'none' : '0 2px 8px rgba(31,111,235,.3)',
+    fontSize: 14, fontWeight: 500, cursor: disabled ? 'not-allowed' : 'pointer',
+    minHeight: 56, transition: 'all .12s',
   };
 }
 
-// 停止按钮：红色边框，带旋转图标
+// 停止按钮：朴素，红色字
 const stopBtnStyle: React.CSSProperties = {
-  flex: '0 0 auto', padding: '0 24px', border: '1px solid #f85149', borderRadius: 14,
-  background: 'rgba(248,81,73,.1)', color: '#ff7b72',
-  fontSize: 14, fontWeight: 600, cursor: 'pointer', minHeight: 56, display: 'flex', alignItems: 'center',
+  flex: '0 0 auto', padding: '0 18px', border: '1px solid #f8514966', borderRadius: 14,
+  background: 'transparent', color: '#ff7b72',
+  fontSize: 14, fontWeight: 500, cursor: 'pointer', minHeight: 56, display: 'flex', alignItems: 'center',
 };
 
 const spinnerStyle: React.CSSProperties = {
