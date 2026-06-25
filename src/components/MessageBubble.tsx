@@ -139,9 +139,9 @@ export function MessageBubble({
     >
       <div style={{
         maxWidth: '85%', padding: '12px 16px', borderRadius: 12,
-        background: isUser ? 'var(--accent-2)' : 'var(--bg-elev)',
+        background: isUser ? 'var(--accent-2)' : 'transparent',
         color: isUser ? '#ffffff' : 'var(--text)',
-        border: isUser ? 'none' : '1px solid var(--border)',
+        border: 'none',
         lineHeight: 1.6, fontSize: 14, wordBreak: 'break-word',
       }}>
         {isUser ? (

@@ -192,6 +192,26 @@ function makeTitle(text: string): string {
 
 // 当前正在运行的 claude 进程（用于中断）
 let currentProc: ChildProcessWithoutNullStreams | null = null;
+// 文本流式吐出定时器（模拟逐字效果，避免整段一次性蹦出）
+let streamTimers: NodeJS.Timeout[] = [];
+let streamMaxDelay = 0;  // 本轮最大的 chunk 延迟（用于估算何时吐完）
+function clearStreamTimers() {
+  for (const t of streamTimers) clearTimeout(t);
+  streamTimers = [];
+  streamMaxDelay = 0;
+}
+// 把一段文本分块、按节奏推给前端（模拟流式打字，每块 ~12 字符，间隔 ~16ms）
+function streamText(convId: string | null, text: string) {
+  const chunkSize = 12;
+  const step = 16;
+  for (let i = 0; i < text.length; i += chunkSize) {
+    const piece = text.slice(i, i + chunkSize);
+    const delay = (i / chunkSize) * step;
+    streamMaxDelay = Math.max(streamMaxDelay, delay);
+    const t = setTimeout(() => sendConv(convId, 'claude:chunk', piece), delay);
+    streamTimers.push(t);
+  }
+}
 
 function send(channel: string, ...args: unknown[]) {
   if (win && !win.isDestroyed()) {
@@ -232,6 +252,7 @@ ipcMain.handle('claude:ask', (_e, prompt: string) => {
 
     const runOnce = (useResume: boolean) => {
       syncWorkspace();  // 用当前对话的工作目录
+      clearStreamTimers();  // 清掉上一轮残留的吐字定时器
       const sid = currentSessionId();
       const args = ['-p', prompt, '--output-format', 'stream-json', '--verbose'];
       if (useResume && sid) {
@@ -291,7 +312,8 @@ ipcMain.handle('claude:ask', (_e, prompt: string) => {
             if (block.type === 'thinking' && block.thinking) {
               sendConv(genConvId, 'claude:event', { kind: 'thinking', text: block.thinking });
             } else if (block.type === 'text' && block.text) {
-              sendConv(genConvId, 'claude:chunk', block.text);
+              // claude 在此模式下不分发 text_delta，整段一次性到位 → 分块流式吐出，模拟逐字
+              streamText(genConvId, String(block.text));
             } else if (block.type === 'tool_use') {
               sendConv(genConvId, 'claude:event', {
                 kind: 'tool_use',
@@ -372,9 +394,11 @@ ipcMain.handle('claude:ask', (_e, prompt: string) => {
       if (code !== 0 && stderrBuf.trim() && !retried) {
         sendConv(genConvId, 'claude:error', stderrBuf.trim());
       }
-      sendConv(genConvId, 'claude:status', 'done');
-      currentProc = null;
-      resolve();
+      // 等流式吐完再标记完成
+      const pendingDelay = streamMaxDelay;
+      const finish = () => { sendConv(genConvId, 'claude:status', 'done'); currentProc = null; resolve(); };
+      if (pendingDelay > 0) setTimeout(finish, pendingDelay + 60);
+      else finish();
     });
   };
 
@@ -385,6 +409,7 @@ ipcMain.handle('claude:ask', (_e, prompt: string) => {
 
 // 中断当前对话
 ipcMain.handle('claude:stop', () => {
+  clearStreamTimers();  // 停掉还没吐完的文字
   if (currentProc) {
     try { currentProc.kill(); } catch (_) {}
     currentProc = null;
@@ -632,6 +657,7 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
+  clearStreamTimers();
   if (currentProc) { try { currentProc.kill(); } catch (_) {} }
   if (process.platform !== 'darwin') app.quit();
 });
