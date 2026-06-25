@@ -79,11 +79,6 @@ function ActionBtn({ title, onClick, children }: { title: string; onClick: () =>
   );
 }
 
-const hoverBarStyle: React.CSSProperties = {
-  display: 'flex', alignItems: 'center', gap: 2, marginTop: 6,
-  transition: 'opacity .12s',
-};
-
 export function MessageBubble({
   message, streaming, theme,
   onRegenerate, onEdit, canAct,
@@ -175,14 +170,18 @@ export function MessageBubble({
         )}
 
         {/* 助手消息底部：用量 + 操作（重生成/复制）。
-            常驻占位，hover 时只切透明度，不增删 DOM，避免高度抖动 */}
+            策略：没用量且没 hover 时完全收起(height:0)，有内容或 hover 才撑开；
+            撑开用 margin-top 过渡，故高度变化平滑，不抖动 */}
         {!isUser && (
           <div style={{
-            ...hoverBarStyle,
+            display: 'flex', alignItems: 'center', gap: 2,
             justifyContent: 'flex-start',
-            minHeight: 22,
-            opacity: hovered || !!message.usage ? 1 : 0,
+            overflow: 'hidden',
+            height: message.usage || (hovered && canAct) ? 'auto' : 0,
+            marginTop: message.usage || (hovered && canAct) ? 6 : 0,
+            opacity: message.usage || (hovered && canAct) ? 1 : 0,
             pointerEvents: hovered && canAct ? 'auto' : 'none',
+            transition: 'opacity .12s, margin-top .12s',
           }}>
             {message.usage && <UsageBar usage={message.usage} />}
             <div style={{ display: 'flex', marginLeft: 'auto' }}>
@@ -196,14 +195,16 @@ export function MessageBubble({
           </div>
         )}
 
-        {/* 用户消息底部：编辑按钮（hover）。同样常驻占位 */}
+        {/* 用户消息底部：编辑按钮（hover）。无内容时完全收起，不占空白 */}
         {isUser && (
           <div style={{
-            ...hoverBarStyle,
-            justifyContent: 'flex-end',
-            minHeight: 22,
+            display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
+            overflow: 'hidden',
+            height: hovered && canAct ? 'auto' : 0,
+            marginTop: hovered && canAct ? 6 : 0,
             opacity: hovered && canAct ? 1 : 0,
             pointerEvents: hovered && canAct ? 'auto' : 'none',
+            transition: 'opacity .12s, margin-top .12s',
           }}>
             <ActionBtn title="编辑" onClick={() => { setEditText(message.content); setEditing(true); }}>
               <Icon name="edit" size={13} color="#ffffffcc" />
