@@ -333,48 +333,6 @@ export interface ClaudeItems {
   agents: string[];
 }
 
-// 扫描 SKILL.md，解析 frontmatter 拿 name→description 映射
-function loadSkillDescriptions(): Record<string, string> {
-  const map: Record<string, string> = {};
-  const home = require('os').homedir();
-  // skills 文件分散在多个目录，都扫一遍
-  const roots = [
-    path.join(home, '.claude/skills'),
-    path.join(home, '.zcode/cli/plugins/cache'),
-    path.join(workspace, '.agents/skills'),
-    path.join(workspace, '.claude/skills'),
-  ];
-  const seen = new Set<string>();
-  for (const root of roots) {
-    let files: string[] = [];
-    try {
-      files = execSync(`find "${root}" -name "SKILL.md" 2>/dev/null`, { encoding: 'utf8' })
-        .trim().split('\n').filter(Boolean);
-    } catch (_) { continue; }
-    for (const f of files) {
-      if (seen.has(f)) continue;
-      seen.add(f);
-      try {
-        const content = fs.readFileSync(f, 'utf8');
-        // 解析 frontmatter（--- 包裹的 YAML）
-        const m = content.match(/^---\n([\s\S]*?)\n---/);
-        if (!m) continue;
-        const fm = m[1];
-        const nameM = fm.match(/^name:\s*(.+)$/m);
-        const descM = fm.match(/^description:\s*(.+)$/m);
-        const name = nameM ? nameM[1].trim().replace(/^["']|["']$/g, '') : '';
-        let desc = descM ? descM[1].trim().replace(/^["']|["']$/g, '') : '';
-        if (name && desc) {
-          // 描述太长截断
-          if (desc.length > 80) desc = desc.slice(0, 78) + '…';
-          map[name] = desc;
-        }
-      } catch (_) {}
-    }
-  }
-  return map;
-}
-
 ipcMain.handle('claude:get-commands', () => {
   return new Promise<ClaudeItems>((resolve) => {
     const claudeBin = findClaude();
@@ -394,11 +352,11 @@ ipcMain.handle('claude:get-commands', () => {
           const obj = JSON.parse(line.trim());
           if (obj.type === 'system' && obj.subtype === 'init') {
             try { proc.kill(); } catch (_) {}
-            const skillNames: string[] = Array.isArray(obj.skills) ? obj.skills : [];
-            const descMap = loadSkillDescriptions();
+            // skill 不用 init 的 skills 数组（那只是 claude 内置命令，无描述），
+            // 改为直接用 SKILL.md 扫描结果（真正的插件/项目 skill，带描述）
             finish({
               commands: Array.isArray(obj.slash_commands) ? obj.slash_commands : [],
-              skills: skillNames.map((n) => ({ name: n, description: descMap[n] })),
+              skills: scanSkills(),
               agents: Array.isArray(obj.agents) ? obj.agents : [],
             });
             return;
@@ -407,10 +365,49 @@ ipcMain.handle('claude:get-commands', () => {
       }
     };
     proc.stdout.on('data', collect);
-    proc.on('close', () => finish({ commands: [], skills: [], agents: [] }));
-    setTimeout(() => { try { proc.kill(); } catch (_) {} finish({ commands: [], skills: [], agents: [] }); }, 8000);
+    proc.on('close', () => finish({ commands: [], skills: scanSkills(), agents: [] }));
+    setTimeout(() => { try { proc.kill(); } catch (_) {} finish({ commands: [], skills: scanSkills(), agents: [] }); }, 8000);
   });
 });
+
+// 单独把扫描逻辑抽出来：扫所有 SKILL.md，返回 {name, description}[] 作为 skill 来源
+function scanSkills(): CmdItem[] {
+  const home = require('os').homedir();
+  const roots = [
+    path.join(home, '.claude/skills'),
+    path.join(home, '.zcode/cli/plugins/cache'),
+    path.join(workspace, '.agents/skills'),
+    path.join(workspace, '.claude/skills'),
+  ];
+  const seen = new Set<string>();
+  const out: CmdItem[] = [];
+  for (const root of roots) {
+    if (!fs.existsSync(root)) continue;
+    let files: string[] = [];
+    try {
+      files = execSync(`find "${root}" -name "SKILL.md" 2>/dev/null`, { encoding: 'utf8' })
+        .trim().split('\n').filter(Boolean);
+    } catch (_) { continue; }
+    for (const f of files) {
+      if (seen.has(f)) continue;
+      seen.add(f);
+      try {
+        const content = fs.readFileSync(f, 'utf8');
+        const m = content.match(/^---\n([\s\S]*?)\n---/);
+        if (!m) continue;
+        const fm = m[1];
+        const nameM = fm.match(/^name:\s*(.+)$/m);
+        const descM = fm.match(/^description:\s*(.+)$/m);
+        const name = nameM ? nameM[1].trim().replace(/^["']|["']$/g, '') : '';
+        let desc = descM ? descM[1].trim().replace(/^["']|["']$/g, '') : '';
+        if (!name) continue;
+        if (desc.length > 80) desc = desc.slice(0, 78) + '…';
+        out.push({ name, description: desc || undefined });
+      } catch (_) {}
+    }
+  }
+  return out;
+}
 
 app.whenReady().then(() => {
   createWindow();
