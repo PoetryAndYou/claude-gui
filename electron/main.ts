@@ -333,6 +333,9 @@ export interface ClaudeItems {
   agents: string[];
 }
 
+// skill 列表：纯文件扫描，即时返回（不依赖 claude 进程）
+ipcMain.handle('claude:get-skills', () => scanSkills());
+
 ipcMain.handle('claude:get-commands', () => {
   return new Promise<ClaudeItems>((resolve) => {
     const claudeBin = findClaude();
