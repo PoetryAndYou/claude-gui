@@ -37,6 +37,12 @@ const PATHS: Record<string, string> = {
   copy: 'M8 8h12v12H8zM4 4h12v4M4 4v12h4',
   // 勾（已复制）
   check: 'M5 12l5 5L20 7',
+  // 回车/发送箭头
+  arrowUp: 'M12 19V5M5 12l7-7 7 7',
+  // 垃圾桶（清空）
+  trash: 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13',
+  // 模型/大脑
+  model: 'M9 3a3 3 0 0 0-3 3v.5A3 3 0 0 0 4 9v1a3 3 0 0 0 1 2.8V14a3 3 0 0 0 3 3 3 3 0 0 0 3 1 3 3 0 0 0 3-1 3 3 0 0 0 3-3v-1.2A3 3 0 0 0 22 10V9a3 3 0 0 0-2-2.5V6a3 3 0 0 0-3-3 3 3 0 0 0-3 1 3 3 0 0 0-3-1z',
 };
 
 export function Icon({

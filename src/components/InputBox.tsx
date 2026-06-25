@@ -24,6 +24,7 @@ export function InputBox({
 }) {
   const [text, setText] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const isThinking = status === 'thinking';
 
   // / 补全
@@ -180,6 +181,30 @@ export function InputBox({
   const showSlash = slashOpen && filtered.length > 0;
   const showAt = atOpen && !showSlash;
 
+  // 工具栏：插入 / 或 @ 触发补全
+  const insertSlash = () => {
+    const el = textareaRef.current;
+    if (!el) return;
+    const pos = el.selectionStart;
+    const newVal = text.slice(0, pos) + '/' + text.slice(pos);
+    setText(newVal);
+    slashAnchor.current = pos;
+    setSlashOpen(true);
+    if (allCmds.length === 0) onLoadCommands();
+    requestAnimationFrame(() => { el.focus(); el.setSelectionRange(pos + 1, pos + 1); });
+  };
+  const insertAt = () => {
+    const el = textareaRef.current;
+    if (!el) return;
+    const pos = el.selectionStart;
+    const newVal = text.slice(0, pos) + '@' + text.slice(pos);
+    setText(newVal);
+    atAnchor.current = pos;
+    setAtOpen(true);
+    loadAtFiles('');
+    requestAnimationFrame(() => { el.focus(); el.setSelectionRange(pos + 1, pos + 1); });
+  };
+
   return (
     <div style={{ position: 'relative', padding: '16px 20px 20px', borderTop: '1px solid #21262d', background: '#0d1117' }}>
       {/* / 补全菜单：限宽跟随输入框，不盖全行 */}
@@ -206,28 +231,48 @@ export function InputBox({
         </div>
       )}
 
-      <div style={{ maxWidth: 880, margin: '0 auto', display: 'flex', gap: 10, alignItems: 'stretch', position: 'relative' }}>
-        <textarea
-          ref={textareaRef}
-          value={text}
-          onChange={onChange}
-          onKeyDown={onKeyDown}
-          rows={2}
-          placeholder="给 claude 发送消息 / 命令 · @ 文件 · Shift+Enter 换行"
-          style={textareaStyle}
-          onFocus={(e) => { e.target.style.borderColor = '#58a6ff'; e.target.style.boxShadow = '0 0 0 3px rgba(88,166,255,.15)'; }}
-          onBlur={(e) => { e.target.style.borderColor = '#30363d'; e.target.style.boxShadow = 'none'; }}
-        />
-        {/* 停止按钮：思考中显示 */}
-        {isThinking && (
-          <button onClick={onStop} style={stopBtnStyle} title="停止生成">
-            <span style={spinnerStyle} /> 停止
-          </button>
-        )}
-        {/* 发送按钮：朴素风格，一直显示，无内容时禁用 */}
-        <button onClick={submit} disabled={!text.trim()} style={sendBtnStyle(!text.trim())}>
-          发送
-        </button>
+      <div style={{ maxWidth: 880, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 0 }}>
+        {/* 输入框容器：内部含 textarea + 底部操作栏 */}
+        <div style={inputContainerStyle} ref={containerRef}>
+          <textarea
+            ref={textareaRef}
+            value={text}
+            onChange={onChange}
+            onKeyDown={onKeyDown}
+            rows={2}
+            placeholder="给 claude 发送消息 · / 命令 · @ 文件 · Shift+Enter 换行"
+            style={{ flex: 1, resize: 'none', border: 'none', background: 'transparent', color: '#e6edf3', padding: '12px 14px 4px', fontSize: 15, lineHeight: 1.6, fontFamily: 'inherit', outline: 'none', maxHeight: 200 }}
+            onFocus={() => { if (containerRef.current) containerRef.current.style.borderColor = '#58a6ff'; }}
+            onBlur={() => { if (containerRef.current) containerRef.current.style.borderColor = '#30363d'; }}
+          />
+          {/* 底部操作栏：左侧快捷按钮，右侧发送/停止 */}
+          <div style={toolbarStyle}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <button onClick={insertSlash} style={toolBtnStyle} title="插入命令">
+                <Icon name="command" size={16} color="#7d8590" />
+              </button>
+              <button onClick={insertAt} style={toolBtnStyle} title="提及文件">
+                <span style={{ fontSize: 16, color: '#7d8590', fontWeight: 500, lineHeight: 1 }}>@</span>
+              </button>
+              {text && (
+                <button onClick={() => { setText(''); focusTextarea(); }} style={toolBtnStyle} title="清空">
+                  <Icon name="trash" size={15} color="#7d8590" />
+                </button>
+              )}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {isThinking ? (
+                <button onClick={onStop} style={stopCircleBtnStyle} title="停止生成">
+                  <span style={{ width: 10, height: 10, background: '#ff7b72', borderRadius: 2, display: 'inline-block' }} />
+                </button>
+              ) : (
+                <button onClick={submit} disabled={!text.trim()} style={sendCircleBtnStyle(!text.trim())} title="发送">
+                  <Icon name="arrowUp" size={16} color={!text.trim() ? '#484f58' : '#fff'} />
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -291,35 +336,41 @@ function SendIcon() {
   );
 }
 
-const textareaStyle: React.CSSProperties = {
-  flex: 1, resize: 'none', border: '1px solid #30363d', borderRadius: 14,
-  background: '#161b22', color: '#e6edf3', padding: '14px 16px',
-  fontSize: 15, lineHeight: 1.6, fontFamily: 'inherit', outline: 'none',
-  minHeight: 56, maxHeight: 220, transition: 'border-color .15s, box-shadow .15s',
+// 输入框容器：圆角边框，内部含 textarea + 底部工具栏（ZCode 风格）
+const inputContainerStyle: React.CSSProperties = {
+  border: '1px solid #30363d', borderRadius: 16, background: '#161b22',
+  display: 'flex', flexDirection: 'column', overflow: 'hidden',
+  transition: 'border-color .15s',
 };
 
-// 发送按钮：朴素边框风格
-function sendBtnStyle(disabled: boolean): React.CSSProperties {
+// 底部工具栏：左侧操作按钮 + 右侧发送/停止
+const toolbarStyle: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+  padding: '4px 6px 6px 6px',
+};
+
+// 工具栏小图标按钮
+const toolBtnStyle: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  width: 30, height: 30, border: 'none', borderRadius: 8,
+  background: 'transparent', cursor: 'pointer',
+};
+
+// 圆形发送按钮（ZCode 风格：深色圆角方块 + 上箭头）
+function sendCircleBtnStyle(disabled: boolean): React.CSSProperties {
   return {
-    flex: '0 0 auto', padding: '0 22px', border: '1px solid', borderRadius: 14,
-    borderColor: disabled ? '#30363d' : '#2f81f7',
-    background: disabled ? 'transparent' : '#1f6feb',
-    color: disabled ? '#484f58' : '#fff',
-    fontSize: 14, fontWeight: 500, cursor: disabled ? 'not-allowed' : 'pointer',
-    minHeight: 56, transition: 'all .12s',
+    width: 32, height: 32, borderRadius: 8, border: 'none',
+    background: disabled ? '#21262d' : '#2f81f7',
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    transition: 'background .12s',
   };
 }
-
-// 停止按钮：朴素，红色字
-const stopBtnStyle: React.CSSProperties = {
-  flex: '0 0 auto', padding: '0 18px', border: '1px solid #f8514966', borderRadius: 14,
-  background: 'transparent', color: '#ff7b72',
-  fontSize: 14, fontWeight: 500, cursor: 'pointer', minHeight: 56, display: 'flex', alignItems: 'center',
-};
-
-const spinnerStyle: React.CSSProperties = {
-  width: 12, height: 12, border: '2px solid rgba(248,81,73,.3)', borderTopColor: '#f85149',
-  borderRadius: '50%', display: 'inline-block', animation: 'spin 0.6s linear infinite',
+// 停止按钮（方形停止图标）
+const stopCircleBtnStyle: React.CSSProperties = {
+  width: 32, height: 32, borderRadius: 8, border: '1px solid #f8514966',
+  background: 'rgba(248,81,73,.1)', cursor: 'pointer',
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
 };
 
 const slashMenuStyle: React.CSSProperties = {
