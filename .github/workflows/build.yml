@@ -1,0 +1,48 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            platform: mac
+            artifact: ClaudeGUI-*.dmg
+          - os: windows-latest
+            platform: win
+            artifact: ClaudeGUI Setup *.exe
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build (tsc + vite)
+        run: npm run build
+
+      - name: Package (${{ matrix.platform }})
+        run: npm run build:${{ matrix.platform }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ClaudeGUI-${{ matrix.platform }}
+          path: release/${{ matrix.artifact }}
+          if-no-files-found: error

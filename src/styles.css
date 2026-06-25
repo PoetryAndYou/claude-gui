@@ -1,0 +1,57 @@
+/* 全局样式 —— 深色主题 */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body, #root {
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  background: #0d1117;
+  color: #e6edf3;
+}
+
+body {
+  -webkit-app-region: drag;        /* 整体可拖动窗口（标题栏隐藏后） */
+  overflow: hidden;
+}
+
+button, input, textarea {
+  -webkit-app-region: no-drag;     /* 交互元素不拖动 */
+}
+
+/* 滚动条 */
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #30363d; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #484f58; }
+
+/* 流式光标闪烁 */
+@keyframes blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
+.cursor-blink { animation: blink 1s step-end infinite; color: #58a6ff; }
+
+/* markdown 排版 */
+.markdown-body { font-size: 14px; line-height: 1.6; }
+.markdown-body p { margin: 0 0 8px; }
+.markdown-body p:last-child { margin-bottom: 0; }
+.markdown-body h1, .markdown-body h2, .markdown-body h3 {
+  margin: 12px 0 8px; font-weight: 600;
+}
+.markdown-body ul, .markdown-body ol { margin: 0 0 8px; padding-left: 24px; }
+.markdown-body li { margin: 2px 0; }
+.markdown-body code {
+  background: rgba(110,118,129,.25);
+  padding: 2px 6px; border-radius: 4px;
+  font-family: 'Menlo','Consolas',monospace; font-size: 13px;
+}
+.markdown-body pre {
+  margin: 8px 0; border-radius: 8px; overflow: hidden;
+}
+.markdown-body blockquote {
+  border-left: 3px solid #30363d; padding-left: 12px;
+  color: #8b949e; margin: 8px 0;
+}
+.markdown-body a { color: #58a6ff; }
+.markdown-body table {
+  border-collapse: collapse; margin: 8px 0; font-size: 13px;
+}
+.markdown-body th, .markdown-body td {
+  border: 1px solid #30363d; padding: 6px 10px;
+}
