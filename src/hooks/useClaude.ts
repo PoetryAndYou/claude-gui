@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { Conversation } from '../../electron/preload';
+import type { Conversation, ClaudeItems } from '../../electron/preload';
 
 export interface Message {
   id: string;
@@ -8,6 +8,8 @@ export interface Message {
 }
 
 export type ChatStatus = 'idle' | 'thinking' | 'error';
+
+const EMPTY_ITEMS: ClaudeItems = { commands: [], skills: [], agents: [] };
 
 interface ConvState {
   messages: Message[];
@@ -23,6 +25,7 @@ export function useClaude() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [status, setStatus] = useState<ChatStatus>('idle');
   const [error, setError] = useState<string>('');
+  const [commands, setCommands] = useState<ClaudeItems>(EMPTY_ITEMS);
   const streamingId = useRef<string | null>(null);
   const inited = useRef(false);
 
@@ -33,11 +36,12 @@ export function useClaude() {
     window.claude.conv.list().then(({ conversations, activeId }) => {
       setConvList(conversations);
       setActiveId(activeId);
-      // 历史对话的消息这里没存（claude 端有，靠 --resume 续接），前端默认空
       const map: Record<string, ConvState> = {};
       conversations.forEach((c) => (map[c.id] = { messages: [] }));
       setConvs(map);
     });
+    // 启动时预加载命令列表，输入框打 / 时能立即补全
+    window.claude.getCommands().then((items) => setCommands(items)).catch(() => {});
 
     const api = window.claude;
     api.onChunk((text) => {
@@ -149,9 +153,14 @@ export function useClaude() {
     setConvList((prev) => prev.map((c) => (c.id === id ? { ...c, title } : c)));
   }, []);
 
+  const loadCommands = useCallback(async () => {
+    const items = await window.claude.getCommands();
+    setCommands(items);
+  }, []);
+
   return {
-    messages, status, error,
+    messages, status, error, commands,
     convList, activeId,
-    send, stop, newChat, switchConv, deleteConv, renameConv,
+    send, stop, newChat, switchConv, deleteConv, renameConv, loadCommands,
   };
 }

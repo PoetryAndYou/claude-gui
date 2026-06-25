@@ -6,9 +6,9 @@ import { Sidebar } from './components/Sidebar';
 
 export default function App() {
   const {
-    messages, status, error,
+    messages, status, error, commands,
     convList, activeId,
-    send, stop, newChat, switchConv, deleteConv, renameConv,
+    send, stop, newChat, switchConv, deleteConv, renameConv, loadCommands,
   } = useClaude();
   const [draft, setDraft] = useState('');
   const draftRef = useRef<(text: string) => void>(() => {});
@@ -60,6 +60,8 @@ export default function App() {
             status={status}
             draft={draft}
             registerDraftSetter={(fn) => (draftRef.current = fn)}
+            commands={commands}
+            onLoadCommands={loadCommands}
           />
         </div>
       </div>
