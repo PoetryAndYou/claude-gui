@@ -233,6 +233,13 @@ function SlashMenu({ items, idx, onPick, onHover }: {
   items: CmdEntry[]; idx: number;
   onPick: (e: CmdEntry) => void; onHover: (i: number) => void;
 }) {
+  const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
+  // 选中项变化时，自动滚入菜单可视区（联动），但用 block:'nearest' 避免影响外层页面滚动
+  useEffect(() => {
+    const el = itemRefs.current[idx];
+    if (el) el.scrollIntoView({ block: 'nearest' });
+  }, [idx]);
+
   return (
     <div style={{
       ...slashMenuStyle,
@@ -241,7 +248,13 @@ function SlashMenu({ items, idx, onPick, onHover }: {
       right: 'max(20px, calc((100% - 880px) / 2 + 132px))',
     }}>
       {items.slice(0, 8).map((entry, i) => (
-        <div key={entry.cmd} onMouseDown={(e) => { e.preventDefault(); onPick(entry); }} onMouseEnter={() => onHover(i)} style={slashItemStyle(i === idx)}>
+        <div
+          key={entry.cmd}
+          ref={(el) => { itemRefs.current[i] = el; }}
+          onMouseDown={(e) => { e.preventDefault(); onPick(entry); }}
+          onMouseEnter={() => onHover(i)}
+          style={slashItemStyle(i === idx)}
+        >
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={kindBadge(entry.kind)}>{entry.kind}</span>
             <span style={{ fontWeight: 600 }}>{entry.cmd}</span>
