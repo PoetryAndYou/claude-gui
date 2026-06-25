@@ -14,6 +14,12 @@ export interface ClaudeAPI {
   onChunk: (cb: (text: string) => void) => void;
   onStatus: (cb: (status: string) => void) => void;
   onError: (cb: (msg: string) => void) => void;
+  // 工作空间
+  getWorkspace: () => Promise<string>;
+  setWorkspace: (dir: string) => Promise<string>;
+  pickDirectory: () => Promise<string | null>;
+  // 命令列表
+  getCommands: () => Promise<string[]>;
 }
 
 contextBridge.exposeInMainWorld('claude', {
@@ -26,4 +32,8 @@ contextBridge.exposeInMainWorld('claude', {
     ipcRenderer.on('claude:status', (_e, status) => cb(status)),
   onError: (cb: (msg: string) => void) =>
     ipcRenderer.on('claude:error', (_e, msg) => cb(msg)),
+  getWorkspace: () => ipcRenderer.invoke('claude:get-workspace'),
+  setWorkspace: (dir: string) => ipcRenderer.invoke('claude:set-workspace', dir),
+  pickDirectory: () => ipcRenderer.invoke('claude:pick-directory'),
+  getCommands: () => ipcRenderer.invoke('claude:get-commands'),
 } satisfies ClaudeAPI);

@@ -1,13 +1,24 @@
+import { useState, useRef } from 'react';
 import { useClaude } from './hooks/useClaude';
 import { MessageList } from './components/MessageList';
 import { InputBox } from './components/InputBox';
+import { Sidebar } from './components/Sidebar';
 
 export default function App() {
   const { messages, status, error, send, stop, newChat } = useClaude();
+  // 输入框内容（命令列表点击时填入）
+  const [draft, setDraft] = useState('');
+  const draftRef = useRef<(text: string) => void>(() => {});
+
+  // 点击命令 → 填入输入框
+  const pickCommand = (cmd: string) => {
+    setDraft(cmd + ' ');
+    draftRef.current(cmd + ' ');
+  };
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {/* 顶部标题栏（可拖动） */}
+      {/* 顶部标题栏 */}
       <header style={{
         height: 40,
         flex: '0 0 auto',
@@ -37,24 +48,35 @@ export default function App() {
         </button>
       </header>
 
-      {/* 错误提示条 */}
-      {error && (
-        <div style={{
-          padding: '8px 16px',
-          background: 'rgba(248,81,73,.12)',
-          color: '#ff7b72',
-          fontSize: 12,
-          borderBottom: '1px solid rgba(248,81,73,.25)',
-        }}>
-          ⚠️ {error}
+      {/* 主体：侧边栏 + 对话区 */}
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+        <Sidebar onPickCommand={pickCommand} />
+
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          {error && (
+            <div style={{
+              padding: '8px 16px',
+              background: 'rgba(248,81,73,.12)',
+              color: '#ff7b72',
+              fontSize: 12,
+              borderBottom: '1px solid rgba(248,81,73,.25)',
+              whiteSpace: 'pre-wrap',
+            }}>
+              ⚠️ {error}
+            </div>
+          )}
+
+          <MessageList messages={messages} status={status} />
+
+          <InputBox
+            onSend={send}
+            onStop={stop}
+            status={status}
+            draft={draft}
+            registerDraftSetter={(fn) => (draftRef.current = fn)}
+          />
         </div>
-      )}
-
-      {/* 消息列表 */}
-      <MessageList messages={messages} status={status} />
-
-      {/* 输入框 */}
-      <InputBox onSend={send} onStop={stop} status={status} />
+      </div>
     </div>
   );
 }

@@ -94,10 +94,27 @@ function send(channel: string, ...args: unknown[]) {
   }
 }
 
+// 当前工作空间目录（用户可改）
+let workspace: string = require('os').homedir();
+
+ipcMain.handle('claude:set-workspace', (_e, dir: string) => {
+  workspace = dir || require('os').homedir();
+  return workspace;
+});
+ipcMain.handle('claude:get-workspace', () => workspace);
+ipcMain.handle('claude:pick-directory', async () => {
+  const { dialog } = require('electron');
+  const result = await dialog.showOpenDialog({ properties: ['openDirectory'] });
+  if (!result.canceled && result.filePaths.length) {
+    workspace = result.filePaths[0];
+    return workspace;
+  }
+  return null;
+});
+
 // 启动一次 claude 对话
 ipcMain.handle('claude:ask', (_e, prompt: string) => {
   return new Promise<void>((resolve) => {
-    // 构造参数
     const args = ['-p', prompt, '--output-format', 'stream-json', '--verbose'];
     if (sessionId) {
       args.unshift('--resume', sessionId);
@@ -106,11 +123,11 @@ ipcMain.handle('claude:ask', (_e, prompt: string) => {
     const claudeBin = findClaude();
     send('claude:status', 'thinking');
 
-    let buffer = ''; // 行缓冲（流式输出可能一行分多次到达）
+    let buffer = '';
 
     try {
       currentProc = spawn(claudeBin, args, {
-        cwd: require('os').homedir(),
+        cwd: workspace,           // 用用户设的工作空间
         env: process.env,
         shell: process.platform === 'win32', // Windows 需要 shell 找 .cmd
       });
@@ -206,6 +223,33 @@ ipcMain.handle('claude:stop', () => {
 // 重置会话（清空上下文）
 ipcMain.handle('claude:new-chat', () => {
   sessionId = null;
+});
+
+// 获取可用的 slash commands（跑一次极简查询，从 init 事件抓）
+ipcMain.handle('claude:get-commands', () => {
+  return new Promise<string[]>((resolve) => {
+    const claudeBin = findClaude();
+    const args = ['-p', ' ', '--output-format', 'stream-json', '--verbose', '--max-turns', '1'];
+    const proc = spawn(claudeBin, args, { cwd: workspace, env: process.env, shell: process.platform === 'win32' });
+    let collected = '';
+    const collect = (chunk: Buffer) => {
+      collected += chunk.toString('utf8');
+      // 找 init 事件，里面有 slash_commands
+      for (const line of collected.split(/\r?\n/)) {
+        try {
+          const obj = JSON.parse(line.trim());
+          if (obj.type === 'system' && obj.subtype === 'init' && Array.isArray(obj.slash_commands)) {
+            proc.kill();
+            resolve(obj.slash_commands as string[]);
+            return;
+          }
+        } catch (_) {}
+      }
+    };
+    proc.stdout.on('data', collect);
+    proc.on('close', () => resolve([]));
+    setTimeout(() => { try { proc.kill(); } catch (_) {} resolve([]); }, 8000); // 超时保护
+  });
 });
 
 app.whenReady().then(() => {
