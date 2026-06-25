@@ -32,9 +32,9 @@ export interface ClaudeAPI {
   ask: (prompt: string) => Promise<void>;
   stop: () => Promise<void>;
   newChat: () => Promise<string>;
-  onChunk: (cb: (text: string) => void) => void;
-  onStatus: (cb: (status: string) => void) => void;
-  onError: (cb: (msg: string) => void) => void;
+  onChunk: (cb: (convId: string, text: string) => void) => void;
+  onStatus: (cb: (convId: string, status: string) => void) => void;
+  onError: (cb: (convId: string, msg: string) => void) => void;
   // 工作空间
   getWorkspace: () => Promise<string>;
   setWorkspace: (dir: string) => Promise<string>;
@@ -54,12 +54,12 @@ contextBridge.exposeInMainWorld('claude', {
   ask: (prompt: string) => ipcRenderer.invoke('claude:ask', prompt),
   stop: () => ipcRenderer.invoke('claude:stop'),
   newChat: () => ipcRenderer.invoke('claude:new-chat'),
-  onChunk: (cb: (text: string) => void) =>
-    ipcRenderer.on('claude:chunk', (_e, text) => cb(text)),
-  onStatus: (cb: (status: string) => void) =>
-    ipcRenderer.on('claude:status', (_e, status) => cb(status)),
-  onError: (cb: (msg: string) => void) =>
-    ipcRenderer.on('claude:error', (_e, msg) => cb(msg)),
+  onChunk: (cb: (convId: string, text: string) => void) =>
+    ipcRenderer.on('claude:chunk', (_e, convId, text) => cb(convId, text)),
+  onStatus: (cb: (convId: string, status: string) => void) =>
+    ipcRenderer.on('claude:status', (_e, convId, status) => cb(convId, status)),
+  onError: (cb: (convId: string, msg: string) => void) =>
+    ipcRenderer.on('claude:error', (_e, convId, msg) => cb(convId, msg)),
   getWorkspace: () => ipcRenderer.invoke('claude:get-workspace'),
   setWorkspace: (dir: string) => ipcRenderer.invoke('claude:set-workspace', dir),
   pickDirectory: () => ipcRenderer.invoke('claude:pick-directory'),

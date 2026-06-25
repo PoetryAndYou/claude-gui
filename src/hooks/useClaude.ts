@@ -26,8 +26,14 @@ export function useClaude() {
   const [status, setStatus] = useState<ChatStatus>('idle');
   const [error, setError] = useState<string>('');
   const [commands, setCommands] = useState<ClaudeItems>(EMPTY_ITEMS);
-  const streamingId = useRef<string | null>(null);
   const inited = useRef(false);
+
+  // 每个对话独立的 streaming 状态（切换不打断）
+  const streamingIds = useRef<Record<string, string>>({});
+  const activeIdRef = useRef(activeId);
+  useEffect(() => { activeIdRef.current = activeId; }, [activeId]);
+  const convListRef = useRef(convList);
+  useEffect(() => { convListRef.current = convList; }, [convList]);
 
   // 初始化：加载已有对话
   useEffect(() => {
@@ -44,56 +50,51 @@ export function useClaude() {
     window.claude.getCommands().then((items) => setCommands(items)).catch(() => {});
 
     const api = window.claude;
-    api.onChunk((text) => {
-      if (!streamingId.current || !activeIdRef.current) return;
+    // 每个对话独立的 streaming 消息 id（按 convId 路由，切换对话不打断后台生成）
+    api.onChunk((convId, text) => {
+      const sid = streamingIds.current[convId];
+      if (!sid) return;
       setConvs((prev) => {
-        const c = prev[activeIdRef.current!];
+        const c = prev[convId];
         if (!c) return prev;
         return {
           ...prev,
-          [activeIdRef.current!]: {
+          [convId]: {
             messages: c.messages.map((m) =>
-              m.id === streamingId.current ? { ...m, content: m.content + text } : m
+              m.id === sid ? { ...m, content: m.content + text } : m
             ),
           },
         };
       });
     });
-    api.onStatus((s) => {
+    api.onStatus((convId, s) => {
       if (s === 'thinking') {
-        setStatus('thinking');
+        if (convId === activeIdRef.current) setStatus('thinking');
         const id = `a-${Date.now()}`;
-        streamingId.current = id;
+        streamingIds.current[convId] = id;
         setConvs((prev) => {
-          const c = prev[activeIdRef.current!];
+          const c = prev[convId];
           if (!c) return prev;
           return {
             ...prev,
-            [activeIdRef.current!]: {
-              messages: [...c.messages, { id, role: 'assistant', content: '' }],
-            },
+            [convId]: { messages: [...c.messages, { id, role: 'assistant', content: '' }] },
           };
         });
-      } else if (s === 'done') {
-        setStatus('idle');
-        streamingId.current = null;
-      } else if (s === 'error') {
-        setStatus('error');
-        streamingId.current = null;
+      } else if (s === 'done' || s === 'error') {
+        delete streamingIds.current[convId];
+        if (convId === activeIdRef.current) {
+          setStatus(s === 'done' ? 'idle' : 'error');
+        }
       }
     });
-    api.onError((msg) => {
-      setError(msg);
-      setStatus('error');
-      streamingId.current = null;
+    api.onError((convId, msg) => {
+      delete streamingIds.current[convId];
+      if (convId === activeIdRef.current) {
+        setError(msg);
+        setStatus('error');
+      }
     });
   }, []);
-
-  // 用 ref 保持 activeId 最新（给回调用）
-  const activeIdRef = useRef(activeId);
-  useEffect(() => { activeIdRef.current = activeId; }, [activeId]);
-  const convListRef = useRef(convList);
-  useEffect(() => { convListRef.current = convList; }, [convList]);
 
   const messages = activeId ? convs[activeId]?.messages ?? [] : [];
 
@@ -131,24 +132,22 @@ export function useClaude() {
     setConvs((prev) => ({ ...prev, [id]: { messages: [] } }));
     setStatus('idle');
     setError('');
-    streamingId.current = null;
   }, []);
 
   const switchConv = useCallback(async (id: string) => {
     const ok = await window.claude.conv.switch(id);
     if (ok) {
       setActiveId(id);
-      setStatus('idle');
+      // 状态跟随目标对话：若它正在生成则 thinking，否则 idle
+      setStatus(streamingIds.current[id] ? 'thinking' : 'idle');
       setError('');
-      streamingId.current = null;
-      // 从 claude session 恢复历史消息
-      const conv = convListRef.current.find((c) => c.id === id);
-      if (conv?.sessionId) {
-        const history = await window.claude.loadHistory(conv.sessionId);
-        setConvs((prev) => ({
-          ...prev,
-          [id]: { messages: history },
-        }));
+      // 从 claude session 恢复历史消息（仅在还没加载过时）
+      if (!convs[id] || convs[id].messages.length === 0) {
+        const conv = convListRef.current.find((c) => c.id === id);
+        if (conv?.sessionId) {
+          const history = await window.claude.loadHistory(conv.sessionId);
+          setConvs((prev) => ({ ...prev, [id]: { messages: history } }));
+        }
       }
     }
   }, []);
