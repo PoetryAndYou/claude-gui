@@ -36,7 +36,15 @@ export interface Conversation {
   title: string;
   sessionId: string | null;
   workspace: string;
+  model: string | null;
   createdAt: number;
+}
+
+// 可选模型项
+export interface ModelItem {
+  alias: string;
+  name: string;
+  desc: string;
 }
 
 export interface ConvAPI {
@@ -60,6 +68,10 @@ export interface ClaudeAPI {
   getWorkspace: () => Promise<string>;
   setWorkspace: (dir: string) => Promise<string>;
   pickDirectory: () => Promise<string | null>;
+  // 模型
+  getModels: () => Promise<ModelItem[]>;
+  getModel: () => Promise<string | null>;
+  setModel: (model: string | null) => Promise<string | null>;
   // 命令/技能/代理
   getCommands: () => Promise<ClaudeItems>;
   getSkills: () => Promise<{ name: string; description?: string }[]>;
@@ -88,6 +100,9 @@ contextBridge.exposeInMainWorld('claude', {
   getWorkspace: () => ipcRenderer.invoke('claude:get-workspace'),
   setWorkspace: (dir: string) => ipcRenderer.invoke('claude:set-workspace', dir),
   pickDirectory: () => ipcRenderer.invoke('claude:pick-directory'),
+  getModels: () => ipcRenderer.invoke('claude:get-models'),
+  getModel: () => ipcRenderer.invoke('claude:get-model'),
+  setModel: (model: string | null) => ipcRenderer.invoke('claude:set-model', model),
   getCommands: () => ipcRenderer.invoke('claude:get-commands'),
   getSkills: () => ipcRenderer.invoke('claude:get-skills'),
   listFiles: (query: string) => ipcRenderer.invoke('claude:list-files', query),

@@ -4,6 +4,9 @@ import { MessageList } from './components/MessageList';
 import { InputBox } from './components/InputBox';
 import { Sidebar } from './components/Sidebar';
 import { Icon } from './components/Icon';
+import { ModelSwitcher } from './components/ModelSwitcher';
+import { CommandPalette } from './components/CommandPalette';
+import type { ModelItem } from '../electron/preload';
 
 const THEME_KEY = 'claude-gui-theme';
 
@@ -33,21 +36,43 @@ export default function App() {
   // 侧边栏折叠
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
+  // ⌘P 命令面板
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  // 模型列表（命令面板用），对话切换时刷新当前模型由 ModelSwitcher 自管
+  const [models, setModels] = useState<ModelItem[]>([]);
+  const [currentModel, setCurrentModel] = useState<string | null>(null);
+  useEffect(() => {
+    window.claude.getModels().then(setModels).catch(() => {});
+  }, []);
+  useEffect(() => {
+    window.claude.getModel().then(setCurrentModel).catch(() => {});
+  }, [activeId]);
+  const setModel = useCallback(async (m: string | null) => {
+    const next = await window.claude.setModel(m);
+    setCurrentModel(next);
+  }, []);
+
   const pickCommand = (cmd: string) => {
     setDraft(cmd + ' ');
     draftRef.current(cmd + ' ');
   };
+
+  const pickDirectory = useCallback(async () => {
+    await window.claude.pickDirectory();
+  }, []);
 
   // 全局快捷键
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey;
       if (!mod) return;
-      // Cmd/Ctrl+B：切换侧边栏
+      // ⌘P 命令面板（阻止浏览器打印对话框）
+      if (e.key === 'p' || e.key === 'P') {
+        if (!e.shiftKey) { e.preventDefault(); setPaletteOpen((o) => !o); return; }
+      }
       if (e.key === 'b' || e.key === 'B') { e.preventDefault(); setSidebarOpen((v) => !v); return; }
-      // Cmd/Ctrl+K：新对话
       if (e.key === 'k' || e.key === 'K') { e.preventDefault(); newChat(); return; }
-      // Cmd/Ctrl+Shift+L：切换主题（Shift+L）
       if ((e.key === 'l' || e.key === 'L') && e.shiftKey) { e.preventDefault(); toggleTheme(); return; }
     };
     window.addEventListener('keydown', onKey);
@@ -65,7 +90,6 @@ export default function App() {
         padding: '0 10px 0 14px', borderBottom: '1px solid var(--border-soft)',
         background: 'var(--bg-elev-2)', WebkitAppRegion: 'drag',
       } as React.CSSProperties}>
-        {/* 左侧红绿灯区域留白 */}
         <span style={{ width: isMac ? 64 : 0, flex: '0 0 auto' }} />
         {/* 侧边栏切换 */}
         <button
@@ -79,8 +103,23 @@ export default function App() {
         <span style={{ fontSize: 13, color: 'var(--text-faint)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
           <Icon name="bolt" size={14} color="var(--accent)" /> Claude
         </span>
-        {/* 右侧：主题切换 */}
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4 }}>
+        {/* 右侧：命令面板 + 模型 + 主题 */}
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button
+            onClick={() => setPaletteOpen(true)}
+            className="no-drag"
+            title="命令面板 (⌘P)"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 5,
+              background: 'transparent', border: '1px solid var(--border-soft)',
+              borderRadius: 6, padding: '3px 8px', cursor: 'pointer',
+              color: 'var(--text-faint)', fontSize: 12,
+            }}
+          >
+            <Icon name="search" size={13} color="var(--text-faint)" />
+            <span>{isMac ? '⌘P' : 'Ctrl+P'}</span>
+          </button>
+          <ModelSwitcher convId={activeId} />
           <button
             onClick={toggleTheme}
             className="no-drag"
@@ -135,6 +174,24 @@ export default function App() {
           />
         </div>
       </div>
+
+      {/* ⌘P 命令面板 */}
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        conversations={convList}
+        activeConvId={activeId}
+        commands={commands}
+        models={models}
+        currentModel={currentModel}
+        onSwitchConv={switchConv}
+        onNewConv={newChat}
+        onPickCommand={pickCommand}
+        onToggleTheme={toggleTheme}
+        onToggleSidebar={() => setSidebarOpen((v) => !v)}
+        onSetModel={setModel}
+        onPickDirectory={pickDirectory}
+      />
     </div>
   );
 }

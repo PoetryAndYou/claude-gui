@@ -93,11 +93,19 @@ interface Conversation {
   title: string;         // 显示名（取首条消息）
   sessionId: string | null;  // claude 的 session_id（用于 --resume）
   workspace: string;     // 该对话的工作目录
+  model: string | null;  // 该对话用的模型别名（sonnet/opus/haiku），null = claude 默认
   createdAt: number;
 }
 
 let conversations: Conversation[] = [];
 let activeConvId: string | null = null;
+
+// 可选模型列表（别名 → 全名/说明），用于前端下拉
+const MODELS: { alias: string; name: string; desc: string }[] = [
+  { alias: 'sonnet', name: 'Sonnet', desc: '均衡 · 推荐' },
+  { alias: 'opus', name: 'Opus', desc: '最强 · 慢/贵' },
+  { alias: 'haiku', name: 'Haiku', desc: '最快 · 轻量' },
+];
 
 // 当前激活对话的工作目录（spawn/listFiles 等都用它）
 function currentWorkspace(): string {
@@ -122,9 +130,15 @@ function loadConversations() {
   try {
     conversations = JSON.parse(require('fs').readFileSync(convStorePath(), 'utf8'));
   } catch (_) { conversations = []; }
-  // 向后兼容：老对话没有 workspace 字段，补默认值
+  // 向后兼容：老对话没有 workspace/model 字段，补默认值
   const home = require('os').homedir();
-  conversations.forEach((c) => { if (!c.workspace) c.workspace = home; });
+  conversations.forEach((c) => { if (!c.workspace) c.workspace = home; if (!c.model) c.model = null; });
+}
+
+// 当前激活对话用的模型（null = claude 默认）
+function currentModel(): string | null {
+  const c = conversations.find((c) => c.id === activeConvId);
+  return c?.model ?? null;
 }
 
 function saveConversations() {
@@ -243,6 +257,15 @@ ipcMain.handle('claude:pick-directory', async () => {
   return null;
 });
 
+// 模型管理：列表 + 读取/设置当前对话模型
+ipcMain.handle('claude:get-models', () => MODELS);
+ipcMain.handle('claude:get-model', () => currentModel());
+ipcMain.handle('claude:set-model', (_e, model: string | null) => {
+  const c = conversations.find((c) => c.id === activeConvId);
+  if (c) { c.model = model || null; saveConversations(); }
+  return currentModel();
+});
+
 // 启动一次 claude 对话
 ipcMain.handle('claude:ask', (_e, prompt: string) => {
   return new Promise<void>((resolve) => {
@@ -254,14 +277,20 @@ ipcMain.handle('claude:ask', (_e, prompt: string) => {
       syncWorkspace();  // 用当前对话的工作目录
       clearStreamTimers();  // 清掉上一轮残留的吐字定时器
       const sid = currentSessionId();
-      const args = ['-p', prompt, '--output-format', 'stream-json', '--verbose'];
+      const model = currentModel();
+      // --include-partial-messages：让 claude 发真实的 stream-event delta（逐字流式）
+      const args = ['-p', prompt, '--output-format', 'stream-json', '--verbose', '--include-partial-messages'];
       if (useResume && sid) {
         args.unshift('--resume', sid);
+      }
+      if (model) {
+        args.push('--model', model);
       }
 
       const claudeBin = findClaude();
       sendConv(genConvId, 'claude:status', 'thinking');
       let buffer = '';
+      let streamedAnyText = false;  // 是否已收到 text_delta（用于完整块兜底去重）
 
       try {
         currentProc = spawn(claudeBin, args, {
@@ -293,34 +322,31 @@ ipcMain.handle('claude:ask', (_e, prompt: string) => {
           sendConv(genConvId, 'claude:chunk', `\n⏳ 请求繁忙，重试中 (${obj.attempt}/${obj.max_retries})…\n`);
         }
 
-        // 流式增量
+        // 流式增量（真实逐字，来自 --include-partial-messages）
         if (obj.type === 'stream_event' && obj.event?.type === 'content_block_delta') {
           const delta = obj.event?.delta;
-          // 思考过程的增量
           if (delta?.type === 'thinking_delta' && delta.thinking) {
             sendConv(genConvId, 'claude:event', { kind: 'thinking', text: delta.thinking });
+            streamedAnyText = streamedAnyText || false;
           }
-          // 文字增量
           else if (delta?.type === 'text_delta' && delta.text) {
+            streamedAnyText = true;
             sendConv(genConvId, 'claude:chunk', delta.text);
           }
-          // 工具输入增量（部分参数流式到位，忽略，用完整事件里的 input）
         }
-        // 助手完整消息：拆出 thinking / tool_use / text 三类块，分别处理
+        // 助手完整消息：工具调用用完整块（带完整 input）；text 仅在没收到任何 delta 时兜底
         else if (obj.type === 'assistant' && Array.isArray(obj.message?.content)) {
           for (const block of obj.message.content) {
-            if (block.type === 'thinking' && block.thinking) {
-              sendConv(genConvId, 'claude:event', { kind: 'thinking', text: block.thinking });
-            } else if (block.type === 'text' && block.text) {
-              // claude 在此模式下不分发 text_delta，整段一次性到位 → 分块流式吐出，模拟逐字
-              streamText(genConvId, String(block.text));
-            } else if (block.type === 'tool_use') {
+            if (block.type === 'tool_use') {
               sendConv(genConvId, 'claude:event', {
                 kind: 'tool_use',
                 toolUseId: block.id,
                 name: block.name,
                 input: block.input,
               });
+            } else if (block.type === 'text' && block.text && !streamedAnyText) {
+              // 兜底：若没收到任何 text_delta（旧 claude / 非 streaming 路径），整段吐出
+              streamText(genConvId, String(block.text));
             }
           }
         }
@@ -425,13 +451,15 @@ ipcMain.handle('conv:list', () => ({
 
 // 新建对话，返回新对话 id；可选首条消息（用于设标题）
 ipcMain.handle('conv:create', (_e, firstMessage?: string) => {
-  // 新对话继承上一个激活对话的工作目录（或主目录）
+  // 新对话继承上一个激活对话的工作目录和模型
   const inheritedWs = currentWorkspace();
+  const inheritedModel = currentModel();
   const conv: Conversation = {
     id: `c-${Date.now()}`,
     title: firstMessage ? makeTitle(firstMessage) : '新对话',
     sessionId: null,
     workspace: inheritedWs,
+    model: inheritedModel,
     createdAt: Date.now(),
   };
   conversations.unshift(conv);
@@ -467,11 +495,13 @@ ipcMain.handle('conv:rename', (_e, id: string, title: string) => {
 // 兼容旧的 new-chat（建空对话并激活）
 ipcMain.handle('claude:new-chat', () => {
   const inheritedWs = currentWorkspace();
+  const inheritedModel = currentModel();
   const conv: Conversation = {
     id: `c-${Date.now()}`,
     title: '新对话',
     sessionId: null,
     workspace: inheritedWs,
+    model: inheritedModel,
     createdAt: Date.now(),
   };
   conversations.unshift(conv);

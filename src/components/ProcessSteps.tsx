@@ -42,6 +42,71 @@ function toolMeta(name: string | undefined): { icon: string; color: string; labe
   }
 }
 
+// 代码 diff 预览：Edit（old→new 红绿行）、MultiEdit（多组）、Write（全绿新内容）
+function DiffView({ name, input }: { name: string; input: unknown }) {
+  const obj = (input || {}) as Record<string, any>;
+  let pairs: { oldS: string; newS: string }[] = [];
+  let filePath = '';
+  if (name === 'Edit') {
+    pairs = [{ oldS: String(obj.old_string ?? ''), newS: String(obj.new_string ?? '') }];
+    filePath = String(obj.file_path ?? '');
+  } else if (name === 'MultiEdit' && Array.isArray(obj.edits)) {
+    pairs = obj.edits.map((e: any) => ({ oldS: String(e.old_string ?? ''), newS: String(e.new_string ?? '') }));
+    filePath = String(obj.file_path ?? '');
+  } else if (name === 'Write') {
+    pairs = [{ oldS: '', newS: String(obj.content ?? '') }];
+    filePath = String(obj.file_path ?? '');
+  }
+
+  return (
+    <div style={diffWrapStyle}>
+      {filePath && (
+        <div style={diffPathStyle}>
+          <Icon name="file" size={12} color="var(--text-muted)" />
+          <span>{filePath}</span>
+        </div>
+      )}
+      {pairs.map((p, i) => (
+        <div key={i} style={diffBlockStyle}>
+          {name === 'Edit' && p.oldS && p.oldS.split('\n').map((ln, j) => (
+            <div key={'o' + j} style={delLineStyle}><span style={gutterStyle}>-</span><span style={codeLineStyle}>{ln || ' '}</span></div>
+          ))}
+          {p.newS.split('\n').map((ln, j) => (
+            <div key={'n' + j} style={addLineStyle}><span style={gutterStyle}>+</span><span style={codeLineStyle}>{ln || ' '}</span></div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+const diffWrapStyle: React.CSSProperties = {
+  borderTop: '1px solid var(--border-soft)',
+  background: 'var(--bg-app)',
+  fontFamily: 'Menlo,Consolas,monospace', fontSize: 11.5,
+  maxHeight: 320, overflowY: 'auto',
+};
+const diffPathStyle: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', gap: 5,
+  padding: '5px 10px', fontSize: 11, color: 'var(--text-muted)',
+  borderBottom: '1px solid var(--border-soft)', background: 'var(--bg-elev-2)',
+};
+const diffBlockStyle: React.CSSProperties = { padding: '4px 0' };
+const gutterStyle: React.CSSProperties = {
+  display: 'inline-block', width: 22, textAlign: 'center',
+  userSelect: 'none', flex: '0 0 auto', fontWeight: 600,
+};
+const codeLineStyle: React.CSSProperties = {
+  whiteSpace: 'pre-wrap', wordBreak: 'break-all', flex: 1,
+};
+const delLineStyle: React.CSSProperties = {
+  display: 'flex', background: 'rgba(248,81,73,.12)',
+  color: '#ffa8a8',
+};
+const addLineStyle: React.CSSProperties = {
+  display: 'flex', background: 'rgba(63,185,80,.12)',
+  color: '#9be6a8',
+};
+
 // 单个过程卡片：思考 / 工具调用（带结果）
 function StepCard({ event, streaming }: { event: ToolEvent; streaming: boolean }) {
   const [open, setOpen] = useState(false);
@@ -98,8 +163,15 @@ function StepCard({ event, streaming }: { event: ToolEvent; streaming: boolean }
           </span>
           {hasResult && <span style={{ color: 'var(--text-fainter)', fontSize: 10 }}>{open ? '▼' : '▶'}</span>}
         </button>
-        {open && hasResult && (
-          <pre style={resultPreStyle(event.isError)}>{event.content}</pre>
+        {open && (
+          <>
+            {/* Edit/MultiEdit/Write：优先渲染 diff 预览 */}
+            {(event.name === 'Edit' || event.name === 'MultiEdit' || event.name === 'Write') && (
+              <DiffView name={event.name!} input={event.input} />
+            )}
+            {/* 工具执行结果（命令输出等） */}
+            {hasResult && <pre style={resultPreStyle(event.isError)}>{event.content}</pre>}
+          </>
         )}
       </div>
     );
