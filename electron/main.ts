@@ -425,8 +425,7 @@ ipcMain.handle('claude:ask', (_e, prompt: string) => {
       // 启动前自检：验证 claudeBin 真能跑。失败就把诊断信息发给前端，
       // 避免前端"一直思考"却不知道为什么（GUI 不继承 shell PATH，claude 常找不到）
       try {
-        // shell:true 和实际 spawn 一致（Windows .cmd 需要）
-        execSync(`"${claudeBin}" --version`, { encoding: 'utf8', timeout: 10000, shell: process.platform === 'win32' });
+        execSync(`"${claudeBin}" --version`, { encoding: 'utf8', timeout: 10000 });
       } catch (verr) {
         const home = require('os').homedir();
         const pathHead = (process.env.PATH || '').split(path.delimiter).slice(0, 8).join('\n  • ');
