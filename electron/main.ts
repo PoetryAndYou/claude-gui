@@ -529,7 +529,6 @@ ipcMain.handle('claude:ask', (_e, prompt: string) => {
 
     currentProc.stdout.on('data', (chunk: Buffer) => {
       anyOutput = true;
-      kickWatchdog();  // 有 stdout 输出就重置超时保护
       buffer += chunk.toString('utf8');
       const lines = buffer.split(/\r?\n/);
       buffer = lines.pop() || '';
@@ -542,20 +541,10 @@ ipcMain.handle('claude:ask', (_e, prompt: string) => {
       stderrBuf += chunk.toString('utf8');
     });
 
-    // 超时保护：claude 卡住/网络问题/进程不退出时，30s 无任何输出就报错，避免前端永远 thinking
-    let watchdog: NodeJS.Timeout | null = setTimeout(() => {
-      if (currentProc) {
-        killProcTree(currentProc);
-        sendConv(genConvId, 'claude:error', 'claude 超时无响应（30s 内未产生任何输出）。可能原因：claude 正在思考过长、网络问题、或命令版本不兼容。');
-        sendConv(genConvId, 'claude:status', 'error');
-      }
-    }, 30000);
-    const kickWatchdog = () => {
-      if (watchdog) { clearTimeout(watchdog); watchdog = null; }
-    };
+    // 无自动超时（长回答不误杀）。用户可用停止按钮手动终止。
+    // 启动即崩/PATH 错误等"真卡死"由 close 时的 anyOutput 检测兜底报错。
 
     currentProc.on('error', (err) => {
-      kickWatchdog();
       const msg = err.message.includes('ENOENT') || err.message.includes('spawn')
         ? `找不到 claude 命令。请确认已安装：npm install -g @anthropic-ai/claude-code\n（错误：${err.message}）`
         : `claude 启动失败: ${err.message}`;
@@ -565,7 +554,6 @@ ipcMain.handle('claude:ask', (_e, prompt: string) => {
     });
 
     currentProc.on('close', (code) => {
-      kickWatchdog();
       if (buffer.trim()) onLine(buffer);
       if (retried) { resolve(); return; }
       // 启动即崩没输出（典型：旧版 claude 不认 --permission-mode / --include-partial-messages）
