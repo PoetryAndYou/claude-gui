@@ -400,16 +400,10 @@ ipcMain.handle('claude:ask', (_e, prompt: string) => {
       const sid = currentSessionId();
       const model = currentModel();
       const mode = currentMode();
-      detectFlags();  // 探测 claude 支持的 flag（兼容旧版如 2.1.34）
-      // 基础参数：所有版本都支持
-      const args = ['-p', prompt, '--output-format', 'stream-json', '--verbose'];
-      // 真流式：仅新版支持 --include-partial-messages（不支持则退化为完整块，仍能用，只是非逐字）
-      if (partialMsgSupport) {
-        args.push('--include-partial-messages');
-      }
-      // 权限放行：按探测结果选可用方式（GUI 非交互必须放权，否则写文件卡死）
-      //   新版 --permission-mode：按对话模式(plan 只读 / acceptEdits/bypassPermissions 全放)
-      //   老版 --dangerously-skip-permissions：全放（无视模式选择，因老版不支持细粒度）
+      detectFlags();  // 探测 claude 支持的 flag（按版本能力走，不支持就不传，避免卡死）
+      // 最稳的核心参数：所有版本都支持 -p + stream-json
+      const args = ['-p', prompt, '--output-format', 'stream-json'];
+      // 权限放行（写文件必须，否则 -p 无法确认卡死）：探测到支持才加，不支持就不加优先保证能跑
       if (permFlag === 'mode') {
         args.push('--permission-mode', mode);
       } else if (permFlag === 'danger') {
