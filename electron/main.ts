@@ -611,20 +611,6 @@ ipcMain.handle('claude:ask', (_e, prompt: string) => {
 
     // stderr 实时攒起来（旧版 claude 不认新 flag 会把 "unknown option" 写这里）
     let stderrBuf = '';
-    // 看门狗：claude 启动后若 25s 内无任何 stdout 输出，判为卡死（Win 下 stdin/.cmd 等坑），
-    // 报错 + 杀进程，避免前端永远转圈
-    let watchdog = setTimeout(() => {
-      if (!anyOutput) {
-        killProcTree(currentProc);
-        const hint = stderrBuf.trim()
-          ? `claude 启动后无响应。stderr：\n${stderrBuf.trim().slice(0, 500)}`
-          : 'claude 启动后 25 秒无响应（可能卡在等待 stdin，或 claude.cmd 调用异常）。\n'
-            + '请确认 Windows 上 claude 可用：在 PowerShell/命令提示符里跑 `claude --version`。';
-        sendConv(genConvId, 'claude:error', hint);
-        sendConv(genConvId, 'claude:status', 'error');
-        resolve();
-      }
-    }, 25000);
     currentProc!.stderr!.on('data', (chunk: Buffer) => {
       stderrBuf += chunk.toString('utf8');
     });
@@ -642,7 +628,6 @@ ipcMain.handle('claude:ask', (_e, prompt: string) => {
     });
 
     currentProc!.on('close', (code) => {
-      clearTimeout(watchdog);
       if (buffer.trim()) onLine(buffer);
       if (retried) { resolve(); return; }
       // 启动即崩没输出（典型：旧版 claude 不认 --permission-mode / --include-partial-messages）

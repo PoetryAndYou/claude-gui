@@ -24,6 +24,8 @@ export function Sidebar({
   onRenameConv: (id: string, title: string) => void;
 }) {
   const isLight = theme === 'light';
+  // mac 透毛玻璃；Windows/Linux 无毛玻璃，侧栏用实色（跟主题），否则会透出窗口黑底变深字看不见
+  const isMac = navigator.platform.toLowerCase().includes('mac');
   const [workspace, setWorkspace] = useState('');
   const [items, setItems] = useState<ClaudeItems>({ commands: [], skills: [], agents: [] });
   const [loaded, setLoaded] = useState(false);
@@ -59,8 +61,8 @@ export function Sidebar({
     <div style={{
       width: 232, flex: '0 0 auto',
       borderRight: '1px solid rgba(128,128,128,.2)',
-      // 两个主题都透明，透出 mac 毛玻璃（毛玻璃明暗跟随系统外观）
-      background: 'transparent',
+      // mac：透明透毛玻璃；Windows/Linux：实色跟随主题（无毛玻璃可透，否则黑底深字看不见）
+      background: isMac ? 'transparent' : (isLight ? '#ffffff' : '#0d1117'),
       padding: '12px 10px 10px',
       overflowY: 'auto',
       display: 'flex', flexDirection: 'column', gap: 0,

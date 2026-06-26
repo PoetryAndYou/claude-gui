@@ -99,13 +99,14 @@ export default function App() {
   const isMac = navigator.platform.toLowerCase().includes('mac');
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: isMac ? 'transparent' : 'var(--bg-app)' }}>
       {/* 顶部标题栏 */}
       <header style={{
         height: 40, flex: '0 0 auto',
         display: 'flex', alignItems: 'center', gap: 6,
         padding: '0 10px 0 14px', borderBottom: '1px solid var(--border-soft)',
-        background: 'transparent',   // 两个主题都透毛玻璃
+        // mac：透毛玻璃；Windows/Linux：实色跟随主题（无毛玻璃，否则透出窗口黑底）
+        background: isMac ? 'transparent' : 'var(--bg-elev-2)',
         WebkitAppRegion: 'drag',
       } as React.CSSProperties}>
         <span style={{ width: isMac ? 64 : 0, flex: '0 0 auto' }} />
