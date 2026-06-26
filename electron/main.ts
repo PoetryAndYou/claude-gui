@@ -273,6 +273,23 @@ function makeTitle(text: string): string {
 
 // 当前正在运行的 claude 进程（用于中断）
 let currentProc: ChildProcessWithoutNullStreams | null = null;
+
+// 杀掉整个进程树：Windows 下 shell:true spawn 时，kill() 只杀外壳 cmd.exe，
+// 真正的 claude 子进程会变孤儿继续跑。用 taskkill /T 杀整树；其他平台直接 kill。
+function killProcTree(proc: ChildProcessWithoutNullStreams | null) {
+  if (!proc || proc.exitCode != null) return;
+  if (process.platform === 'win32') {
+    try {
+      // /T 杀进程树（含子进程），/F 强制
+      require('child_process').execSync(`taskkill /pid ${proc.pid} /T /F`, { stdio: 'ignore' });
+    } catch (_) {
+      try { proc.kill(); } catch (__) {}
+    }
+  } else {
+    try { proc.kill(); } catch (_) {}
+  }
+}
+
 // 文本流式吐出定时器（模拟逐字效果，避免整段一次性蹦出）
 let streamTimers: NodeJS.Timeout[] = [];
 let streamMaxDelay = 0;  // 本轮最大的 chunk 延迟（用于估算何时吐完）
@@ -456,7 +473,7 @@ ipcMain.handle('claude:ask', (_e, prompt: string) => {
           // 清掉失效的 sessionId，避免后续继续用
           const c = conversations.find((cc) => cc.id === genConvId);
           if (c) { c.sessionId = null; saveConversations(); }
-          try { if (currentProc) currentProc.kill(); } catch (_) {}
+          killProcTree(currentProc);
           sendConv(genConvId, 'claude:chunk', '\n（会话已失效，重新发起…）\n');
           setTimeout(() => runOnce(false), 200);
           return;
@@ -490,7 +507,7 @@ ipcMain.handle('claude:ask', (_e, prompt: string) => {
     // 超时保护：claude 卡住/网络问题/进程不退出时，30s 无任何输出就报错，避免前端永远 thinking
     let watchdog: NodeJS.Timeout | null = setTimeout(() => {
       if (currentProc) {
-        try { currentProc.kill(); } catch (_) {}
+        killProcTree(currentProc);
         sendConv(genConvId, 'claude:error', 'claude 超时无响应（30s 内未产生任何输出）。可能原因：claude 正在思考过长、网络问题、或命令版本不兼容。');
         sendConv(genConvId, 'claude:status', 'error');
       }
@@ -541,10 +558,8 @@ ipcMain.handle('claude:ask', (_e, prompt: string) => {
 // 中断当前对话
 ipcMain.handle('claude:stop', () => {
   clearStreamTimers();  // 停掉还没吐完的文字
-  if (currentProc) {
-    try { currentProc.kill(); } catch (_) {}
-    currentProc = null;
-  }
+  killProcTree(currentProc);  // 杀进程树（Windows 下否则孤儿继续跑，前端终止无反应）
+  currentProc = null;
   send('claude:status', 'done');
 });
 
@@ -796,6 +811,6 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   clearStreamTimers();
-  if (currentProc) { try { currentProc.kill(); } catch (_) {} }
+  killProcTree(currentProc);
   if (process.platform !== 'darwin') app.quit();
 });
