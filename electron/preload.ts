@@ -37,6 +37,7 @@ export interface Conversation {
   sessionId: string | null;
   workspace: string;
   model: string | null;
+  mode: string | null;
   createdAt: number;
 }
 
@@ -72,6 +73,10 @@ export interface ClaudeAPI {
   getModels: () => Promise<ModelItem[]>;
   getModel: () => Promise<string | null>;
   setModel: (model: string | null) => Promise<string | null>;
+  // 权限模式
+  getModes: () => Promise<ModelItem[]>;
+  getMode: () => Promise<string>;
+  setMode: (mode: string | null) => Promise<string>;
   // 命令/技能/代理
   getCommands: () => Promise<ClaudeItems>;
   getSkills: () => Promise<{ name: string; description?: string }[]>;
@@ -103,6 +108,9 @@ contextBridge.exposeInMainWorld('claude', {
   getModels: () => ipcRenderer.invoke('claude:get-models'),
   getModel: () => ipcRenderer.invoke('claude:get-model'),
   setModel: (model: string | null) => ipcRenderer.invoke('claude:set-model', model),
+  getModes: () => ipcRenderer.invoke('claude:get-modes'),
+  getMode: () => ipcRenderer.invoke('claude:get-mode'),
+  setMode: (mode: string | null) => ipcRenderer.invoke('claude:set-mode', mode),
   getCommands: () => ipcRenderer.invoke('claude:get-commands'),
   getSkills: () => ipcRenderer.invoke('claude:get-skills'),
   listFiles: (query: string) => ipcRenderer.invoke('claude:list-files', query),

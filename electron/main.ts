@@ -146,6 +146,7 @@ interface Conversation {
   sessionId: string | null;  // claude 的 session_id（用于 --resume）
   workspace: string;     // 该对话的工作目录
   model: string | null;  // 该对话用的模型别名（sonnet/opus/haiku），null = claude 默认
+  mode: string | null;   // 该对话的权限模式（acceptEdits/plan/bypassPermissions），null = acceptEdits
   createdAt: number;
 }
 
@@ -157,6 +158,14 @@ const MODELS: { alias: string; name: string; desc: string }[] = [
   { alias: 'sonnet', name: 'Sonnet', desc: '均衡 · 推荐' },
   { alias: 'opus', name: 'Opus', desc: '最强 · 慢/贵' },
   { alias: 'haiku', name: 'Haiku', desc: '最快 · 轻量' },
+];
+
+// 可选权限模式列表，用于前端下拉
+// GUI 非交互，必须放行；acceptEdits 适中最常用
+const MODES: { alias: string; name: string; desc: string }[] = [
+  { alias: 'acceptEdits', name: '自动改文件', desc: '读写编辑无需确认' },
+  { alias: 'plan', name: '只规划', desc: '只读分析·不动手' },
+  { alias: 'bypassPermissions', name: '全自动', desc: '放行一切·含命令' },
 ];
 
 // 当前激活对话的工作目录（spawn/listFiles 等都用它）
@@ -184,13 +193,19 @@ function loadConversations() {
   } catch (_) { conversations = []; }
   // 向后兼容：老对话没有 workspace/model 字段，补默认值
   const home = require('os').homedir();
-  conversations.forEach((c) => { if (!c.workspace) c.workspace = home; if (!c.model) c.model = null; });
+  conversations.forEach((c) => { if (!c.workspace) c.workspace = home; if (!c.model) c.model = null; if (!c.mode) c.mode = null; });
 }
 
 // 当前激活对话用的模型（null = claude 默认）
 function currentModel(): string | null {
   const c = conversations.find((c) => c.id === activeConvId);
   return c?.model ?? null;
+}
+
+// 当前激活对话用的权限模式（null = acceptEdits 兜底）
+function currentMode(): string {
+  const c = conversations.find((c) => c.id === activeConvId);
+  return c?.mode || 'acceptEdits';
 }
 
 function saveConversations() {
@@ -318,6 +333,15 @@ ipcMain.handle('claude:set-model', (_e, model: string | null) => {
   return currentModel();
 });
 
+// 模式管理：列表 + 读取/设置当前对话权限模式
+ipcMain.handle('claude:get-modes', () => MODES);
+ipcMain.handle('claude:get-mode', () => currentMode());
+ipcMain.handle('claude:set-mode', (_e, mode: string | null) => {
+  const c = conversations.find((c) => c.id === activeConvId);
+  if (c) { c.mode = mode || null; saveConversations(); }
+  return currentMode();
+});
+
 // 启动一次 claude 对话
 ipcMain.handle('claude:ask', (_e, prompt: string) => {
   return new Promise<void>((resolve) => {
@@ -330,8 +354,10 @@ ipcMain.handle('claude:ask', (_e, prompt: string) => {
       clearStreamTimers();  // 清掉上一轮残留的吐字定时器
       const sid = currentSessionId();
       const model = currentModel();
+      const mode = currentMode();
       // --include-partial-messages：让 claude 发真实的 stream-event delta（逐字流式）
-      const args = ['-p', prompt, '--output-format', 'stream-json', '--verbose', '--include-partial-messages'];
+      // --permission-mode：按当前对话的模式放行权限（GUI 非交互，必须放行否则卡死）
+      const args = ['-p', prompt, '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--permission-mode', mode];
       if (useResume && sid) {
         args.unshift('--resume', sid);
       }
@@ -503,15 +529,17 @@ ipcMain.handle('conv:list', () => ({
 
 // 新建对话，返回新对话 id；可选首条消息（用于设标题）
 ipcMain.handle('conv:create', (_e, firstMessage?: string) => {
-  // 新对话继承上一个激活对话的工作目录和模型
+  // 新对话继承上一个激活对话的工作目录、模型和模式
   const inheritedWs = currentWorkspace();
   const inheritedModel = currentModel();
+  const inheritedMode = currentMode();
   const conv: Conversation = {
     id: `c-${Date.now()}`,
     title: firstMessage ? makeTitle(firstMessage) : '新对话',
     sessionId: null,
     workspace: inheritedWs,
     model: inheritedModel,
+    mode: inheritedMode,
     createdAt: Date.now(),
   };
   conversations.unshift(conv);
@@ -548,12 +576,14 @@ ipcMain.handle('conv:rename', (_e, id: string, title: string) => {
 ipcMain.handle('claude:new-chat', () => {
   const inheritedWs = currentWorkspace();
   const inheritedModel = currentModel();
+  const inheritedMode = currentMode();
   const conv: Conversation = {
     id: `c-${Date.now()}`,
     title: '新对话',
     sessionId: null,
     workspace: inheritedWs,
     model: inheritedModel,
+    mode: inheritedMode,
     createdAt: Date.now(),
   };
   conversations.unshift(conv);
@@ -658,7 +688,7 @@ ipcMain.handle('claude:get-commands', () => {
   syncWorkspace();
   return new Promise<ClaudeItems>((resolve) => {
     const claudeBin = findClaude();
-    const args = ['-p', ' ', '--output-format', 'stream-json', '--verbose', '--max-turns', '1'];
+    const args = ['-p', ' ', '--output-format', 'stream-json', '--verbose', '--max-turns', '1', '--permission-mode', 'acceptEdits'];
     const proc = spawn(claudeBin, args, { cwd: workspace, env: process.env, shell: process.platform === 'win32' });
     let collected = '';
     let resolved = false;

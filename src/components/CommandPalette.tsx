@@ -6,23 +6,24 @@ export interface CommandAction {
   id: string;
   label: string;
   hint?: string;
-  group: '对话' | '命令' | '视图' | '模型' | '工作空间';
+  group: '对话' | '命令' | '视图' | '模型' | '模式' | '工作空间';
   icon: string;
   iconColor: string;
   run: () => void;
   keywords?: string;
 }
 
-// ⌘P 快捷命令面板：聚合对话切换、命令/skill、视图(主题/侧边栏)、模型、换目录
+// ⌘P 快捷命令面板：聚合对话切换、命令/skill、视图(主题/侧边栏)、模型、模式、换目录
 export function CommandPalette({
   open, onClose,
   conversations, activeConvId,
   commands,
   models, currentModel,
+  modes, currentMode,
   onSwitchConv, onNewConv,
   onPickCommand,
   onToggleTheme, onToggleSidebar,
-  onSetModel, onPickDirectory,
+  onSetModel, onSetMode, onPickDirectory,
 }: {
   open: boolean;
   onClose: () => void;
@@ -31,12 +32,15 @@ export function CommandPalette({
   commands: ClaudeItems;
   models: ModelItem[];
   currentModel: string | null;
+  modes: ModelItem[];
+  currentMode: string;
   onSwitchConv: (id: string) => void;
   onNewConv: () => void;
   onPickCommand: (cmd: string) => void;
   onToggleTheme: () => void;
   onToggleSidebar: () => void;
   onSetModel: (model: string | null) => void;
+  onSetMode: (mode: string) => void;
   onPickDirectory: () => void;
 }) {
   const [query, setQuery] = useState('');
@@ -100,6 +104,14 @@ export function CommandPalette({
         run: () => { onSetModel(m.alias); onClose(); },
       });
     });
+    // 模式（权限）
+    modes.forEach((m) => {
+      acts.push({
+        id: 'mode:' + m.alias, label: m.name + ' · ' + m.desc, hint: currentMode === m.alias ? '当前' : '', group: '模式',
+        icon: 'gear', iconColor: 'var(--green)', keywords: m.alias,
+        run: () => { onSetMode(m.alias); onClose(); },
+      });
+    });
     // 视图
     acts.push({
       id: 'theme', label: '切换主题（深/浅）', hint: '⌘⇧L', group: '视图',
@@ -118,8 +130,8 @@ export function CommandPalette({
       run: () => { onPickDirectory(); onClose(); },
     });
     return acts;
-  }, [conversations, activeConvId, commands, models, currentModel,
-      onNewConv, onSwitchConv, onPickCommand, onToggleTheme, onToggleSidebar, onSetModel, onPickDirectory, onClose]);
+  }, [conversations, activeConvId, commands, models, currentModel, modes, currentMode,
+      onNewConv, onSwitchConv, onPickCommand, onToggleTheme, onToggleSidebar, onSetModel, onSetMode, onPickDirectory, onClose]);
 
   // 过滤
   const filtered = useMemo(() => {
@@ -143,7 +155,7 @@ export function CommandPalette({
   if (!open) return null;
 
   // 按组分段渲染
-  const groupOrder: CommandAction['group'][] = ['对话', '命令', '视图', '模型', '工作空间'];
+  const groupOrder: CommandAction['group'][] = ['对话', '命令', '视图', '模型', '模式', '工作空间'];
   let lastGroup = '';
 
   return (

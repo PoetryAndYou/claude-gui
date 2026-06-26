@@ -5,6 +5,7 @@ import { InputBox } from './components/InputBox';
 import { Sidebar } from './components/Sidebar';
 import { Icon } from './components/Icon';
 import { ModelSwitcher } from './components/ModelSwitcher';
+import { ModeSwitcher } from './components/ModeSwitcher';
 import { CommandPalette } from './components/CommandPalette';
 import type { ModelItem } from '../electron/preload';
 
@@ -51,6 +52,20 @@ export default function App() {
   const setModel = useCallback(async (m: string | null) => {
     const next = await window.claude.setModel(m);
     setCurrentModel(next);
+  }, []);
+
+  // 模式列表（命令面板用），对话切换时刷新当前模式由 ModeSwitcher 自管
+  const [modes, setModes] = useState<ModelItem[]>([]);
+  const [currentMode, setCurrentMode] = useState<string>('acceptEdits');
+  useEffect(() => {
+    window.claude.getModes().then(setModes).catch(() => {});
+  }, []);
+  useEffect(() => {
+    window.claude.getMode().then(setCurrentMode).catch(() => {});
+  }, [activeId]);
+  const setMode = useCallback(async (m: string) => {
+    const next = await window.claude.setMode(m);
+    setCurrentMode(next);
   }, []);
 
   const pickCommand = (cmd: string) => {
@@ -120,6 +135,7 @@ export default function App() {
             <span>{isMac ? '⌘P' : 'Ctrl+P'}</span>
           </button>
           <ModelSwitcher convId={activeId} />
+          <ModeSwitcher convId={activeId} />
           <button
             onClick={toggleTheme}
             className="no-drag"
@@ -184,12 +200,15 @@ export default function App() {
         commands={commands}
         models={models}
         currentModel={currentModel}
+        modes={modes}
+        currentMode={currentMode}
         onSwitchConv={switchConv}
         onNewConv={newChat}
         onPickCommand={pickCommand}
         onToggleTheme={toggleTheme}
         onToggleSidebar={() => setSidebarOpen((v) => !v)}
         onSetModel={setModel}
+        onSetMode={setMode}
         onPickDirectory={pickDirectory}
       />
     </div>
