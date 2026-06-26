@@ -369,6 +369,7 @@ ipcMain.handle('claude:ask', (_e, prompt: string) => {
       sendConv(genConvId, 'claude:status', 'thinking');
       let buffer = '';
       let streamedAnyText = false;  // 是否已收到 text_delta（用于完整块兜底去重）
+      let anyOutput = false;        // 是否产生过任何 stdout（用于检测"启动即崩"）
 
       try {
         currentProc = spawn(claudeBin, args, {
@@ -472,18 +473,34 @@ ipcMain.handle('claude:ask', (_e, prompt: string) => {
     };
 
     currentProc.stdout.on('data', (chunk: Buffer) => {
+      anyOutput = true;
+      kickWatchdog();  // 有 stdout 输出就重置超时保护
       buffer += chunk.toString('utf8');
       const lines = buffer.split(/\r?\n/);
       buffer = lines.pop() || '';
       for (const line of lines) onLine(line);
     });
 
+    // stderr 实时攒起来（旧版 claude 不认新 flag 会把 "unknown option" 写这里）
     let stderrBuf = '';
     currentProc.stderr.on('data', (chunk: Buffer) => {
       stderrBuf += chunk.toString('utf8');
     });
 
+    // 超时保护：claude 卡住/网络问题/进程不退出时，30s 无任何输出就报错，避免前端永远 thinking
+    let watchdog: NodeJS.Timeout | null = setTimeout(() => {
+      if (currentProc) {
+        try { currentProc.kill(); } catch (_) {}
+        sendConv(genConvId, 'claude:error', 'claude 超时无响应（30s 内未产生任何输出）。可能原因：claude 正在思考过长、网络问题、或命令版本不兼容。');
+        sendConv(genConvId, 'claude:status', 'error');
+      }
+    }, 30000);
+    const kickWatchdog = () => {
+      if (watchdog) { clearTimeout(watchdog); watchdog = null; }
+    };
+
     currentProc.on('error', (err) => {
+      kickWatchdog();
       const msg = err.message.includes('ENOENT') || err.message.includes('spawn')
         ? `找不到 claude 命令。请确认已安装：npm install -g @anthropic-ai/claude-code\n（错误：${err.message}）`
         : `claude 启动失败: ${err.message}`;
@@ -493,8 +510,18 @@ ipcMain.handle('claude:ask', (_e, prompt: string) => {
     });
 
     currentProc.on('close', (code) => {
+      kickWatchdog();
       if (buffer.trim()) onLine(buffer);
       if (retried) { resolve(); return; }
+      // 启动即崩没输出（典型：旧版 claude 不认 --permission-mode / --include-partial-messages）
+      // 必须明确报错，否则前端从 thinking→done 无内容，看起来就是"转圈后空白"
+      if (!anyOutput && stderrBuf.trim()) {
+        sendConv(genConvId, 'claude:error',
+          `claude 启动失败（退出码 ${code}）：${stderrBuf.trim()}\n\n请升级 claude: npm install -g @anthropic-ai/claude-code@latest`);
+        sendConv(genConvId, 'claude:status', 'error');
+        resolve();
+        return;
+      }
       if (code !== 0 && stderrBuf.trim() && !retried) {
         sendConv(genConvId, 'claude:error', stderrBuf.trim());
       }
