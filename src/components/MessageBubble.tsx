@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -97,7 +97,7 @@ function ActionBtn({ title, onClick, children }: { title: string; onClick: () =>
   );
 }
 
-export function MessageBubble({
+export const MessageBubble = memo(function MessageBubble({
   message, streaming, theme,
   onRegenerate, onEdit, canAct,
 }: {
@@ -164,23 +164,30 @@ export function MessageBubble({
           <div className="markdown-body">
             {/* 过程展示：思考 + 工具调用卡片（Codex 式），出现在最终文字之前 */}
             <ProcessSteps events={message.events ?? []} streaming={streaming} />
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              components={{
-                code({ inline, className, children, ...props }: any) {
-                  const match = /language-(\w+)/.exec(className || '');
-                  if (!inline && match) {
-                    return <CodeBlock language={match[1]} theme={theme}>{String(children).replace(/\n$/, '')}</CodeBlock>;
-                  }
-                  if (!inline && !match) {
-                    return <CodeBlock language="text" theme={theme}>{String(children).replace(/\n$/, '')}</CodeBlock>;
-                  }
-                  return <code className={className} {...props}>{children}</code>;
-                },
-              }}
-            >
-              {message.content}
-            </ReactMarkdown>
+            {/* 流式中：纯文本渲染（零解析开销，保证流畅）；
+                完成后：ReactMarkdown 完整渲染（代码块/表格/格式）。
+                避免每帧 delta 都重新 parse 整段 markdown 导致后期越来越慢 */}
+            {streaming && message.content ? (
+              <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{message.content}</div>
+            ) : (
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  code({ inline, className, children, ...props }: any) {
+                    const match = /language-(\w+)/.exec(className || '');
+                    if (!inline && match) {
+                      return <CodeBlock language={match[1]} theme={theme}>{String(children).replace(/\n$/, '')}</CodeBlock>;
+                    }
+                    if (!inline && !match) {
+                      return <CodeBlock language="text" theme={theme}>{String(children).replace(/\n$/, '')}</CodeBlock>;
+                    }
+                    return <code className={className} {...props}>{children}</code>;
+                  },
+                }}
+              >
+                {message.content}
+              </ReactMarkdown>
+            )}
             {/* 思考中且尚无文字/过程时：显示旋转加载动画（取代生硬的"思考中…"文字） */}
             {streaming && !message.content && (!message.events || message.events.length === 0) && (
               <ThreeDotsSpinner />
@@ -233,4 +240,4 @@ export function MessageBubble({
       </div>
     </div>
   );
-}
+});
