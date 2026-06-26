@@ -84,6 +84,26 @@ function findClaude(): string {
   return 'claude';
 }
 
+// 探测 claude 版本支持哪些 flag（旧版如 2.1.34 不认 --permission-mode / --include-partial-messages，
+// 传不认的 flag 会直接退出报错 → GUI 卡死）。一次性探测，结果缓存。
+let flagCache: { ok: boolean; checked: boolean } = { ok: false, checked: false };
+let partialMsgSupport = false;
+function detectFlags() {
+  if (flagCache.checked) return;
+  flagCache.checked = true;
+  try {
+    const claudeBin = findClaude();
+    const help = String(execSync(`${claudeBin} --help`, { encoding: 'utf8' }));
+    // --include-partial-messages 支持才用真流式（否则退化为完整块）
+    partialMsgSupport = /include-partial-messages/.test(help);
+    flagCache.ok = true;
+  } catch (_) {
+    // 探测失败（极旧版可能没有 --help）→ 保守退化，都不加
+    partialMsgSupport = false;
+    flagCache.ok = false;
+  }
+}
+
 // 跨平台目录递归扫描（替代 Unix find，Windows 也能用）
 // maxDepth: 最大深度；返回找到的文件/目录绝对路径数组
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', '.cache', 'tmp']);
@@ -372,9 +392,17 @@ ipcMain.handle('claude:ask', (_e, prompt: string) => {
       const sid = currentSessionId();
       const model = currentModel();
       const mode = currentMode();
-      // --include-partial-messages：让 claude 发真实的 stream-event delta（逐字流式）
-      // --permission-mode：按当前对话的模式放行权限（GUI 非交互，必须放行否则卡死）
-      const args = ['-p', prompt, '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--permission-mode', mode];
+      detectFlags();  // 探测 claude 支持的 flag（兼容旧版如 2.1.34）
+      // 基础参数：所有版本都支持
+      const args = ['-p', prompt, '--output-format', 'stream-json', '--verbose'];
+      // 真流式：仅新版支持 --include-partial-messages（不支持则退化为完整块，仍能用，只是非逐字）
+      if (partialMsgSupport) {
+        args.push('--include-partial-messages');
+      }
+      // 权限模式：新版用 --permission-mode，老版不支持则不加（默认仍能读，但写可能需确认）
+      if (flagCache.ok) {
+        args.push('--permission-mode', mode);
+      }
       if (useResume && sid) {
         args.unshift('--resume', sid);
       }
@@ -730,8 +758,10 @@ ipcMain.handle('claude:get-commands', () => {
   syncWorkspace();
   return new Promise<ClaudeItems>((resolve) => {
     const claudeBin = findClaude();
-    const args = ['-p', ' ', '--output-format', 'stream-json', '--verbose', '--max-turns', '1', '--permission-mode', 'acceptEdits'];
-    const proc = spawn(claudeBin, args, { cwd: workspace, env: process.env, shell: process.platform === 'win32' });
+    const cmds = ['-p', ' ', '--output-format', 'stream-json', '--verbose', '--max-turns', '1'];
+    detectFlags();
+    if (flagCache.ok) cmds.push('--permission-mode', 'acceptEdits');
+    const proc = spawn(claudeBin, cmds, { cwd: workspace, env: process.env, shell: process.platform === 'win32' });
     let collected = '';
     let resolved = false;
     const finish = (items: ClaudeItems) => {
