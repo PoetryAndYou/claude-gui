@@ -8,6 +8,7 @@ export interface Message {
   usage?: Usage | null;   // 仅助手消息：token / 耗时 / 成本
   events?: ToolEvent[];   // 仅助手消息：思考/工具调用过程（Codex 式展示）
   error?: boolean;        // 标记出错的消息
+  startedAt?: number;     // 助手消息：开始思考的时间戳（前端墙钟计时用）
 }
 
 export type ChatStatus = 'idle' | 'thinking' | 'error';
@@ -107,7 +108,7 @@ export function useClaude() {
           if (!c) return prev;
           return {
             ...prev,
-            [convId]: { messages: [...c.messages, { id, role: 'assistant', content: '' }] },
+            [convId]: { messages: [...c.messages, { id, role: 'assistant', content: '', startedAt: Date.now() }] },
           };
         });
       } else if (s === 'done' || s === 'error') {
@@ -277,9 +278,13 @@ export function useClaude() {
    */
   const editAndResend = useCallback(
     async (userMsgId: string, newContent: string) => {
-      if (!activeId || status === 'thinking') return;
+      if (!activeId) return;
       const trimmed = newContent.trim();
       if (!trimmed) return;
+      // 编辑重发应强制生效：若上轮还在生成，先停掉再重发（避免两条 claude 并发）
+      if (status === 'thinking') {
+        window.claude.stop();
+      }
       const conv = convs[activeId];
       if (!conv) return;
       const idx = conv.messages.findIndex((m) => m.id === userMsgId);

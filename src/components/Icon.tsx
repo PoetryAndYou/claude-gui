@@ -39,6 +39,8 @@ const PATHS: Record<string, string> = {
   check: 'M5 12l5 5L20 7',
   // 回车/发送箭头
   arrowUp: 'M12 19V5M5 12l7-7 7 7',
+  // 向下箭头（回到底部）
+  arrowDown: 'M12 5v14M5 12l7 7 7-7',
   // 垃圾桶（清空）
   trash: 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13',
   // 编辑/铅笔

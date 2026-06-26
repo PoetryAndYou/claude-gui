@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import type { ClaudeItems, Conversation } from '../../electron/preload';
+import type { Theme } from '../hooks/useClaude';
 import { ConversationList } from './ConversationList';
 import { Icon } from './Icon';
 
 export function Sidebar({
+  theme,
   onPickCommand,
   conversations,
   activeConvId,
@@ -12,6 +14,7 @@ export function Sidebar({
   onDeleteConv,
   onRenameConv,
 }: {
+  theme: Theme;
   onPickCommand: (cmd: string) => void;
   conversations: Conversation[];
   activeConvId: string | null;
@@ -20,6 +23,7 @@ export function Sidebar({
   onDeleteConv: (id: string) => void;
   onRenameConv: (id: string, title: string) => void;
 }) {
+  const isLight = theme === 'light';
   const [workspace, setWorkspace] = useState('');
   const [items, setItems] = useState<ClaudeItems>({ commands: [], skills: [], agents: [] });
   const [loaded, setLoaded] = useState(false);
@@ -53,78 +57,78 @@ export function Sidebar({
 
   return (
     <div style={{
-      width: 230, flex: '0 0 auto',
-      borderRight: '1px solid var(--border-soft)',
-      background: 'var(--bg-elev-2)',
-      padding: '12px 10px',
+      width: 232, flex: '0 0 auto',
+      borderRight: '1px solid rgba(128,128,128,.2)',
+      // 两个主题都透明，透出 mac 毛玻璃（毛玻璃明暗跟随系统外观）
+      background: 'transparent',
+      padding: '12px 10px 10px',
       overflowY: 'auto',
-      display: 'flex', flexDirection: 'column', gap: 14,
+      display: 'flex', flexDirection: 'column', gap: 0,
+      color: isLight ? '#1f2328' : '#e6e9ef',   /* 浅主题深字 / 深主题浅字 */
     } as React.CSSProperties}>
-      {/* 对话列表 */}
-      <ConversationList
-        conversations={conversations}
-        activeId={activeConvId}
-        onSelect={onSelectConv}
-        onNew={onNewConv}
-        onDelete={onDeleteConv}
-        onRename={onRenameConv}
-      />
-
-      {/* 工作空间 */}
-      <div>
-        <div style={labelStyle}>工作空间</div>
-        <button onClick={pickDir} title={workspace} style={{ ...sideBtnStyle, display: 'flex', alignItems: 'center', gap: 6 }}>
-          <Icon name="folder" size={14} color="var(--text-muted)" /> <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{shortPath.length > 22 ? '…' + shortPath.slice(-21) : shortPath}</span>
-        </button>
+      {/* 对话列表：占据剩余高度，自身滚动 */}
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+        <ConversationList
+          conversations={conversations}
+          activeId={activeConvId}
+          onSelect={onSelectConv}
+          onNew={onNewConv}
+          onDelete={onDeleteConv}
+          onRename={onRenameConv}
+        />
       </div>
 
-      {/* 拉取按钮 */}
-      <button onClick={load} style={{ ...sideBtnStyle, color: 'var(--accent)', borderColor: 'var(--accent-soft)', display: 'flex', alignItems: 'center', gap: 6 }}>
-        <Icon name="zap" size={14} color="var(--accent)" /> {loading ? '加载中…' : loaded ? '刷新命令/技能' : '加载命令/技能'}
-      </button>
+      {/* 次要工具：工作空间 + 命令/技能/代理。沉到底部，用细分隔线与对话区隔开 */}
+      <div style={{ marginTop: 8, paddingTop: 10, borderTop: '1px solid rgba(128,128,128,.18)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <button onClick={pickDir} title={workspace} style={{ ...footerBtnStyle, display: 'flex', alignItems: 'center', gap: 7 }}>
+          <Icon name="folder" size={14} color="var(--text-muted)" />
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{shortPath.length > 22 ? '…' + shortPath.slice(-21) : shortPath || '选择工作空间'}</span>
+        </button>
 
-      {/* 三组列表 */}
-      {loaded && !loading && (
-        <>
-          <CommandGroup
-            title="命令" icon={<Icon name="command" size={13} color="var(--accent)" />} count={items.commands.length}
-            collapsed={collapsed.commands}
-            onToggle={() => toggle('commands')}
-            renderItem={(c) => (
-              <button key={c} onClick={() => onPickCommand('/' + c)} style={itemStyle}>
-                /{c}
-              </button>
+        <button onClick={load} style={{ ...footerBtnStyle, color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 7 }}>
+          <Icon name="zap" size={14} color="var(--accent)" />
+          {loading ? '加载中…' : loaded ? '刷新命令/技能' : '加载命令/技能'}
+        </button>
+
+        {/* 三组列表 */}
+        {loaded && !loading && (
+          <>
+            <CommandGroup
+              title="命令" icon={<Icon name="command" size={12} color="var(--accent)" />} count={items.commands.length}
+              collapsed={collapsed.commands}
+              onToggle={() => toggle('commands')}
+              renderItem={(c) => (
+                <button key={c} onClick={() => onPickCommand('/' + c)} style={itemStyle}>/{c}</button>
+              )}
+              items={items.commands}
+            />
+            <CommandGroup
+              title="技能" icon={<Icon name="star" size={12} color="var(--purple)" />} count={items.skills.length}
+              collapsed={collapsed.skills}
+              onToggle={() => toggle('skills')}
+              renderItem={(s) => (
+                <button key={s.name} onClick={() => onPickCommand('/' + s.name)} style={itemStyle} title={s.description}>
+                  <div style={{ fontWeight: 500 }}>{s.name}</div>
+                  {s.description && <div style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 1 }}>{s.description}</div>}
+                </button>
+              )}
+              items={items.skills}
+            />
+            <CommandGroup
+              title="代理" icon={<Icon name="circle" size={12} color="var(--green)" />} count={items.agents.length}
+              collapsed={collapsed.agents}
+              onToggle={() => toggle('agents')}
+              renderItem={(c) => (
+                <button key={c} onClick={() => onPickCommand('/' + c)} style={itemStyle}>{c}</button>
+              )}
+              items={items.agents}
+            />
+            {items.commands.length === 0 && items.skills.length === 0 && items.agents.length === 0 && (
+              <div style={{ fontSize: 12, color: 'var(--text-faint)', padding: '4px 8px' }}>未获取到（请确认 claude 已登录）</div>
             )}
-            items={items.commands}
-          />
-          <CommandGroup
-            title="技能" icon={<Icon name="star" size={13} color="var(--purple)" />} count={items.skills.length}
-            collapsed={collapsed.skills}
-            onToggle={() => toggle('skills')}
-            renderItem={(s) => (
-              <button key={s.name} onClick={() => onPickCommand('/' + s.name)} style={itemStyle} title={s.description}>
-                <div style={{ fontWeight: 500 }}>{s.name}</div>
-                {s.description && <div style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 1 }}>{s.description}</div>}
-              </button>
-            )}
-            items={items.skills}
-          />
-          <CommandGroup
-            title="代理" icon={<Icon name="circle" size={13} color="var(--green)" />} count={items.agents.length}
-            collapsed={collapsed.agents}
-            onToggle={() => toggle('agents')}
-            renderItem={(c) => (
-              <button key={c} onClick={() => onPickCommand('/' + c)} style={itemStyle}>
-                {c}
-              </button>
-            )}
-            items={items.agents}
-          />
-          {items.commands.length === 0 && items.skills.length === 0 && items.agents.length === 0 && (
-            <div style={{ fontSize: 12, color: 'var(--text-faint)' }}>未获取到（请确认 claude 已登录）</div>
-          )}
-        </>
-      )}
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -154,14 +158,11 @@ function CommandGroup<T>({
   );
 }
 
-const labelStyle: React.CSSProperties = {
-  fontSize: 11, color: 'var(--text-faint)', marginBottom: 6,
-  textTransform: 'uppercase', letterSpacing: 0.5,
-};
-const sideBtnStyle: React.CSSProperties = {
+// 底部次要按钮：内嵌底色，去硬边框，与对话区的视觉重量区分开
+const footerBtnStyle: React.CSSProperties = {
   display: 'block', width: '100%', textAlign: 'left',
-  background: 'var(--bg-elev)', border: '1px solid var(--border)', color: 'var(--text-soft)',
-  padding: '8px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
+  background: 'rgba(128,128,128,.1)', border: '1px solid transparent', color: 'inherit',
+  padding: '7px 10px', borderRadius: 7, fontSize: 12, cursor: 'pointer',
   whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
 };
 const groupHeaderStyle: React.CSSProperties = {

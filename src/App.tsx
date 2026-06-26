@@ -31,6 +31,8 @@ export default function App() {
     html.classList.remove('dark', 'light');
     html.classList.add(theme);
     localStorage.setItem(THEME_KEY, theme);
+    // 同步到系统外观，让 mac 毛玻璃明暗跟随
+    window.claude.setNativeTheme(theme).catch(() => {});
   }, [theme]);
   const toggleTheme = useCallback(() => setTheme((t) => (t === 'dark' ? 'light' : 'dark')), []);
 
@@ -103,7 +105,8 @@ export default function App() {
         height: 40, flex: '0 0 auto',
         display: 'flex', alignItems: 'center', gap: 6,
         padding: '0 10px 0 14px', borderBottom: '1px solid var(--border-soft)',
-        background: 'var(--bg-elev-2)', WebkitAppRegion: 'drag',
+        background: 'transparent',   // 两个主题都透毛玻璃
+        WebkitAppRegion: 'drag',
       } as React.CSSProperties}>
         <span style={{ width: isMac ? 64 : 0, flex: '0 0 auto' }} />
         {/* 侧边栏切换 */}
@@ -151,6 +154,7 @@ export default function App() {
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         {sidebarOpen && (
           <Sidebar
+            theme={theme}
             onPickCommand={pickCommand}
             conversations={convList}
             activeConvId={activeId}
@@ -161,7 +165,7 @@ export default function App() {
           />
         )}
 
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg-app)' }}>
           {error && (
             <div style={{
               padding: '8px 16px', background: 'var(--red-soft)', color: 'var(--red)',

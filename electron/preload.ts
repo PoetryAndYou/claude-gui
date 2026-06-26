@@ -80,8 +80,14 @@ export interface ClaudeAPI {
   // 命令/技能/代理
   getCommands: () => Promise<ClaudeItems>;
   getSkills: () => Promise<{ name: string; description?: string }[]>;
-  // 文件列表（@ 提及用）
-  listFiles: (query: string) => Promise<{ name: string; path: string; isDir: boolean }[]>;
+  // 文件列表（@ 提及用）：列出 subdir（相对 workspace，空=顶层）的直接子项
+  listFiles: (query: string, subdir?: string) => Promise<{ name: string; path: string; isDir: boolean }[]>;
+  // 保存粘贴的图片（base64）到工作区，返回相对路径；失败返回 { error }
+  saveImage: (dataB64: string, ext: string) => Promise<{ path?: string; error?: string }>;
+  // 读取工作区图片为 dataURL（前端显示用）；失败返回 { error }
+  readImage: (relPath: string) => Promise<{ dataUrl?: string; error?: string }>;
+  // 同步主题到系统外观（mac 毛玻璃明暗跟随系统外观）
+  setNativeTheme: (theme: 'light' | 'dark') => Promise<void>;
   // 历史消息（从 session 恢复）
   loadHistory: (sessionId: string) => Promise<{ id: string; role: 'user' | 'assistant'; content: string }[]>;
   // 对话管理
@@ -113,7 +119,11 @@ contextBridge.exposeInMainWorld('claude', {
   setMode: (mode: string | null) => ipcRenderer.invoke('claude:set-mode', mode),
   getCommands: () => ipcRenderer.invoke('claude:get-commands'),
   getSkills: () => ipcRenderer.invoke('claude:get-skills'),
-  listFiles: (query: string) => ipcRenderer.invoke('claude:list-files', query),
+  listFiles: (query: string, subdir?: string) => ipcRenderer.invoke('claude:list-files', query, subdir),
+  saveImage: (dataB64: string, ext: string) => ipcRenderer.invoke('claude:save-image', dataB64, ext),
+  readImage: (relPath: string) => ipcRenderer.invoke('claude:read-image', relPath),
+  // 同步主题到系统外观（mac 毛玻璃明暗跟随系统外观）
+  setNativeTheme: (theme: 'light' | 'dark') => ipcRenderer.invoke('claude:set-native-theme', theme),
   loadHistory: (sessionId: string) => ipcRenderer.invoke('claude:load-history', sessionId),
   conv: {
     list: () => ipcRenderer.invoke('conv:list'),

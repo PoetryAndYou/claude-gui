@@ -2,6 +2,18 @@ import { useState, useMemo } from 'react';
 import type { Conversation } from '../../electron/preload';
 import { Icon } from './Icon';
 
+// 按时间分桶：今天 / 昨天 / 本周 / 更早（Mail.app 式结构，编码时间信息）
+function timeBucket(ts: number): string {
+  const now = new Date();
+  const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const day = 86400000;
+  const diff = startToday - ts;
+  if (diff < 0) return '今天';
+  if (diff < day) return '昨天';
+  if (diff < 7 * day) return '本周';
+  return '更早';
+}
+
 export function ConversationList({
   conversations,
   activeId,
@@ -27,6 +39,17 @@ export function ConversationList({
     return conversations.filter((c) => c.title.toLowerCase().includes(q));
   }, [conversations, search]);
 
+  // 按时间分桶（保留数组顺序，假定已按新→旧排好）
+  const groups = useMemo(() => {
+    const map = new Map<string, Conversation[]>();
+    for (const c of filtered) {
+      const b = search.trim() ? '' : timeBucket(c.createdAt);
+      if (!map.has(b)) map.set(b, []);
+      map.get(b)!.push(c);
+    }
+    return Array.from(map.entries());
+  }, [filtered, search]);
+
   const startEdit = (c: Conversation) => {
     setEditingId(c.id);
     setEditText(c.title);
@@ -37,14 +60,14 @@ export function ConversationList({
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, gap: 8 }}>
       <button onClick={onNew} style={newBtnStyle}>
-        <Icon name="plus" size={14} color="#fff" /> 新对话
+        <Icon name="plus" size={14} color="var(--accent)" /> 新对话
       </button>
 
-      {/* 搜索框 */}
+      {/* 搜索框：内嵌底色，去硬边框 */}
       <div style={{ position: 'relative' }}>
-        <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', display: 'flex' }}>
+        <span style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', display: 'flex' }}>
           <Icon name="search" size={13} color="var(--text-faint)" />
         </span>
         <input
@@ -55,46 +78,52 @@ export function ConversationList({
         />
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, maxHeight: '36vh', overflowY: 'auto' }}>
+      {/* 列表：flex:1 自身滚动，按时间分组 */}
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', marginTop: 2 }}>
         {conversations.length === 0 && (
-          <div style={{ fontSize: 12, color: 'var(--text-faint)', padding: '8px 4px' }}>暂无对话</div>
+          <div style={{ fontSize: 12, color: 'var(--text-faint)', padding: '12px 8px' }}>暂无对话</div>
         )}
         {conversations.length > 0 && filtered.length === 0 && (
-          <div style={{ fontSize: 12, color: 'var(--text-faint)', padding: '8px 4px' }}>无匹配对话</div>
+          <div style={{ fontSize: 12, color: 'var(--text-faint)', padding: '12px 8px' }}>无匹配对话</div>
         )}
-        {filtered.map((c) => (
-          <div
-            key={c.id}
-            onClick={() => !editingId && onSelect(c.id)}
-            onDoubleClick={(e) => { e.stopPropagation(); startEdit(c); }}
-            style={convItemStyle(c.id === activeId)}
-            title="单击切换 · 双击重命名"
-          >
-            {editingId === c.id ? (
-              <input
-                value={editText}
-                onChange={(e) => setEditText(e.target.value)}
-                onClick={(e) => e.stopPropagation()}
-                onBlur={commitEdit}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') commitEdit();
-                  if (e.key === 'Escape') setEditingId(null);
-                }}
-                autoFocus
-                style={editInputStyle}
-              />
-            ) : (
-              <>
-                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {c.title || '新对话'}
-                </span>
-                <button
-                  onClick={(e) => { e.stopPropagation(); onDelete(c.id); }}
-                  style={delBtnStyle}
-                  title="删除"
-                >×</button>
-              </>
-            )}
+        {groups.map(([label, convs]) => (
+          <div key={label || 'all'} style={{ marginBottom: 2 }}>
+            {label && <div style={groupLabelStyle}>{label}</div>}
+            {convs.map((c) => (
+              <div
+                key={c.id}
+                onClick={() => !editingId && onSelect(c.id)}
+                onDoubleClick={(e) => { e.stopPropagation(); startEdit(c); }}
+                className={'conv-item' + (c.id === activeId ? ' active' : '')}
+                title="单击切换 · 双击重命名"
+              >
+                {editingId === c.id ? (
+                  <input
+                    value={editText}
+                    onChange={(e) => setEditText(e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    onBlur={commitEdit}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') commitEdit();
+                      if (e.key === 'Escape') setEditingId(null);
+                    }}
+                    autoFocus
+                    style={editInputStyle}
+                  />
+                ) : (
+                  <>
+                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {c.title || '新对话'}
+                    </span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onDelete(c.id); }}
+                      className="conv-del"
+                      title="删除"
+                    ><Icon name="close" size={12} color="var(--text-muted)" /></button>
+                  </>
+                )}
+              </div>
+            ))}
           </div>
         ))}
       </div>
@@ -103,31 +132,22 @@ export function ConversationList({
 }
 
 const newBtnStyle: React.CSSProperties = {
-  width: '100%', textAlign: 'left',
-  background: 'var(--accent-2)', border: 'none', color: '#fff',
-  padding: '8px 12px', borderRadius: 6, fontSize: 13,
-  cursor: 'pointer', fontWeight: 500,
-  display: 'flex', alignItems: 'center', gap: 6,
+  width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+  padding: '7px 10px', borderRadius: 8, fontSize: 13, fontWeight: 500,
+  background: 'var(--accent-soft)', color: 'var(--accent)',
+  border: 'none', cursor: 'pointer',
 };
 const searchInputStyle: React.CSSProperties = {
-  width: '100%', background: 'var(--bg-app)', border: '1px solid var(--border)',
-  color: 'var(--text-soft)', padding: '6px 10px 6px 28px', borderRadius: 6,
-  fontSize: 12, outline: 'none', fontFamily: 'inherit',
+  width: '100%', background: 'rgba(128,128,128,.14)',
+  border: '1px solid transparent',
+  color: 'inherit', padding: '6px 10px 6px 30px', borderRadius: 7,
+  fontSize: 12.5, outline: 'none', fontFamily: 'inherit',
 };
-const convItemStyle = (active: boolean): React.CSSProperties => ({
-  display: 'flex', alignItems: 'center', gap: 4,
-  padding: '7px 8px', borderRadius: 5, fontSize: 12,
-  cursor: 'pointer',
-  background: active ? 'var(--bg-elev)' : 'transparent',
-  color: active ? 'var(--text)' : 'var(--text-muted)',
-  border: active ? '1px solid var(--border)' : '1px solid transparent',
-  whiteSpace: 'nowrap',
-});
-const delBtnStyle: React.CSSProperties = {
-  background: 'transparent', border: 'none', color: 'var(--text-fainter)',
-  fontSize: 14, cursor: 'pointer', padding: '0 4px', lineHeight: 1,
+const groupLabelStyle: React.CSSProperties = {
+  fontSize: 11, color: 'var(--text-faint)',
+  padding: '10px 8px 4px', letterSpacing: 0.3, fontWeight: 500,
 };
 const editInputStyle: React.CSSProperties = {
   flex: 1, background: 'var(--bg-app)', border: '1px solid var(--accent)',
-  color: 'var(--text)', borderRadius: 3, padding: '2px 6px', fontSize: 12, outline: 'none',
+  color: 'var(--text)', borderRadius: 4, padding: '2px 6px', fontSize: 12.5, outline: 'none',
 };

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron';
 import { spawn, execSync, ChildProcessWithoutNullStreams } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -14,7 +14,11 @@ function createWindow() {
     minWidth: 480,
     minHeight: 400,
     titleBarStyle: 'hiddenInset',
-    backgroundColor: '#0d1117',
+    // mac 原生毛玻璃：窗口背景透明 + vibrancy，让侧边栏透出桌面/后方内容
+    transparent: process.platform === 'darwin',
+    vibrancy: process.platform === 'darwin' ? 'under-window' : undefined,
+    visualEffectState: 'active',
+    backgroundColor: process.platform === 'darwin' ? '#00000000' : '#0d1117',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -41,20 +45,31 @@ function createWindow() {
 function ensureUserPath() {
   const { existsSync } = require('fs');
   const home = require('os').homedir();
+  const isWin = process.platform === 'win32';
   // macOS / Linux 上常见的 npm/volta/nvm/用户 bin 目录
-  const extraDirs = [
+  let extraDirs = [
+    // unix
     `${home}/.npm-global/bin`,
     `${home}/.local/bin`,
     `${home}/.volta/bin`,
     `${home}/.bun/bin`,
     '/opt/homebrew/bin',
     '/usr/local/bin',
-    // Windows nvm / npm 全局（注意 nvm 不是 nvml）
-    `${home}/AppData/Roaming/npm`,
-    `${home}/AppData/Local/nvm`,
-    `${home}/.fnm`,
-    `${home}/scoop/shims`,
   ];
+  if (isWin) {
+    // Windows：用 path.join 生成路径。注意用正斜杠作为参数——path.join 在 win 上
+    // 会自动转成反斜杠，且 Windows 原生 API/where/spawn 都能正确识别正斜杠。
+    const a = (rel: string) => path.join(home, rel);
+    extraDirs = [
+      a('AppData/Roaming/npm'),                              // npm 全局（最常见，claude.cmd 在此）
+      a('AppData/Local/nvm'),                                 // nvm-windows
+      a('AppData/Local/fnm_multishells'),                    // fnm
+      a('AppData/Local/Programs/claude'),                    // 原生安装器（2.1.x 新版）
+      a('AppData/Local/Microsoft/WinGet/Packages/Anthropic.claude'), // winget
+      a('scoop/shims'),                                      // scoop
+      a('.bun/bin'),                                         // bun (win)
+    ];
+  }
   const extra = extraDirs.filter((d) => {
     try { return existsSync(d); } catch (_) { return false; }
   });
@@ -77,19 +92,45 @@ function findClaude(): string {
     : ['claude'];
   for (const c of candidates) {
     try {
+      // Windows: where 命令；Linux/Mac: which 命令
       const which = require('child_process').execSync(
-        isWin ? `where ${c}` : `which ${c}`, { stdio: 'pipe' }
+        isWin ? `where ${c}` : `which ${c}`,
+        { stdio: 'pipe', shell: isWin ? process.env.ComSpec || 'cmd.exe' : false }
       ).toString().trim().split(/\r?\n/)[0];
-      if (which && existsSync(which)) return which;
+      if (which && existsSync(which) && which.toLowerCase() !== c) return which;
     } catch (_) {}
   }
   return 'claude';
+}
+
+// 跨平台执行 claude 子命令（--help / --version）：
+// Windows 下 claudeBin 是 claude.cmd，execSync 直接跑 .cmd 必须设 shell:true（用 cmd.exe），
+// 否则 Node 抛 EINVAL / 未知命令 → detectFlags 走 catch → 所有 flag 退化 → 行为异常。
+// Unix 下不需要 shell。
+function execClaude(claudeBin: string, subArgs: string, timeoutMs = 10000): string {
+  const isWin = process.platform === 'win32';
+  const needsShell = isWin && /\.(cmd|bat)$/i.test(claudeBin);
+  if (needsShell) {
+    // 走 cmd.exe，整体加引号防路径含空格
+    return String(execSync(`"${claudeBin}" ${subArgs}`, {
+      shell: process.env.ComSpec || 'cmd.exe',
+      encoding: 'utf8',
+      timeout: timeoutMs,
+    }));
+  }
+  // unix / .exe：直接跑
+  return String(execSync(`"${claudeBin}" ${subArgs}`, {
+    encoding: 'utf8',
+    timeout: timeoutMs,
+  }));
 }
 
 // 探测 claude 版本支持哪些 flag（旧版如 2.1.34 不认 --permission-mode / --include-partial-messages，
 // 传不认的 flag 会直接退出报错 → GUI 卡死）。一次性探测，结果缓存。
 let flagCache: { ok: boolean; checked: boolean } = { ok: false, checked: false };
 let partialMsgSupport = false;
+// --max-turns 仅新版支持；2.1.34 的 --help 里没有，传了虽不报错但也不生效，按版本决定加不加
+let maxTurnsSupport = false;
 // 放权方式优先级：新版的 --permission-mode > 老版的 --dangerously-skip-permissions > 无
 let permFlag: 'mode' | 'danger' | 'none' = 'none';
 function detectFlags() {
@@ -97,8 +138,9 @@ function detectFlags() {
   flagCache.checked = true;
   try {
     const claudeBin = findClaude();
-    const help = String(execSync(`${claudeBin} --help`, { encoding: 'utf8' }));
+    const help = execClaude(claudeBin, '--help');
     partialMsgSupport = /include-partial-messages/.test(help);
+    maxTurnsSupport = /max-turns/.test(help);
     // 新版优先用 --permission-mode（更细粒度），老版用 --dangerously-skip-permissions
     if (/permission-mode/.test(help)) permFlag = 'mode';
     else if (/dangerously-skip-permissions/.test(help)) permFlag = 'danger';
@@ -107,6 +149,7 @@ function detectFlags() {
   } catch (_) {
     // 探测失败（极旧版可能没有 --help）→ 保守退化，都不加
     partialMsgSupport = false;
+    maxTurnsSupport = false;
     permFlag = 'none';
     flagCache.ok = false;
   }
@@ -125,7 +168,9 @@ function walkDir(root: string, maxDepth: number, limit = 500): string[] {
     catch (_) { return; }
     for (const ent of entries) {
       if (results.length >= limit) break;
-      if (ent.name.startsWith('.') && ent.name !== '.agents' && ent.name !== '.claude') continue;
+      // 所有 . 开头的隐藏项一律跳过（.agents/.claude/.git 等是工具/缓存目录，
+      // 递归进去会占用 @列表名额，把真正的项目文件挤掉）
+      if (ent.name.startsWith('.')) continue;
       const full = path.join(dir, ent.name);
       if (ent.isDirectory()) {
         if (SKIP_DIRS.has(ent.name)) continue;
@@ -402,7 +447,8 @@ ipcMain.handle('claude:ask', (_e, prompt: string) => {
       const mode = currentMode();
       detectFlags();  // 探测 claude 支持的 flag
       // 参数：2.1.34 及以上都支持，探测到才加（探测不到则退化保证能跑）
-      const args = ['-p', prompt, '--output-format', 'stream-json'];
+      // --verbose 必填：2.1.193 起 -p --output-format stream-json 不配 --verbose 直接报错退出
+      const args = ['-p', prompt, '--output-format', 'stream-json', '--verbose'];
       // 逐字流式（实测 2.1.34 支持）
       if (partialMsgSupport) {
         args.push('--include-partial-messages');
@@ -425,7 +471,7 @@ ipcMain.handle('claude:ask', (_e, prompt: string) => {
       // 启动前自检：验证 claudeBin 真能跑。失败就把诊断信息发给前端，
       // 避免前端"一直思考"却不知道为什么（GUI 不继承 shell PATH，claude 常找不到）
       try {
-        execSync(`"${claudeBin}" --version`, { encoding: 'utf8', timeout: 10000 });
+        execClaude(claudeBin, '--version', 10000);
       } catch (verr) {
         const home = require('os').homedir();
         const pathHead = (process.env.PATH || '').split(path.delimiter).slice(0, 8).join('\n  • ');
@@ -696,36 +742,77 @@ export interface ClaudeItems {
 // skill 列表：纯文件扫描，即时返回（不依赖 claude 进程）
 ipcMain.handle('claude:get-skills', () => { syncWorkspace(); return scanSkills(); });
 
-// 文件列表：@ 提及用，扫描工作空间下的文件/目录
-ipcMain.handle('claude:list-files', (_e, query: string) => {
+// 文件列表：@ 提及用，列出指定子目录(默认顶层)的直接子项（可逐级进入，不递归）
+// query: 文件名筛选；subdir: 相对 workspace 的子目录路径（如 "TradingAgents/assets"），空=顶层
+ipcMain.handle('claude:list-files', (_e, query: string, subdir?: string) => {
   try {
     syncWorkspace();
     const q = (query || '').trim();
-    // 跨平台递归扫描工作空间（替代 Unix find）
-    const files = walkDir(workspace, 3, 200);
-    const out = files;
-    const entries = out.map((p) => {
-      const rel = path.relative(workspace, p);
-      const name = path.basename(p);
-      let isDir = false;
-      try { isDir = fs.statSync(p).isDirectory(); } catch (_) {}
-      return { name, path: rel, isDir };
-    }).filter((e) => e.path !== '');  // 去掉工作空间根目录本身（rel 为空）
-    // 目录优先，再按路径字母序
-    entries.sort((a, b) => {
-      if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
-      return a.path.localeCompare(b.path);
-    });
-    // 按 query 过滤
+    // 解析目标目录：限制在 workspace 内（防 .. 越界）
+    const sub = (subdir || '').trim();
+    const target = sub && !path.isAbsolute(sub) && !sub.includes('..')
+      ? path.join(workspace, sub)
+      : workspace;
+    const relBase = path.relative(workspace, target) || ''; // 当前目录相对 workspace 的路径
+    let entries: fs.Dirent[];
+    try { entries = fs.readdirSync(target, { withFileTypes: true }); }
+    catch (_) { return []; }
+    let out = entries
+      .filter((e) => !e.name.startsWith('.'))                         // 跳过隐藏项
+      .filter((e) => !SKIP_DIRS.has(e.name))                          // 跳过 node_modules/dist 等
+      .map((e) => {
+        const rel = relBase ? path.join(relBase, e.name) : e.name;    // 相对 workspace 的完整路径
+        return { name: e.name, path: rel, isDir: e.isDirectory() };
+      });
+    // 目录优先，再按名称排序
+    out.sort((a, b) => (a.isDir !== b.isDir ? (a.isDir ? -1 : 1) : a.name.localeCompare(b.name)));
+    // 按 query 过滤（匹配文件名）
     if (q) {
       const lq = q.toLowerCase();
-      return entries.filter((e) => e.name.toLowerCase().includes(lq) || e.path.toLowerCase().includes(lq)).slice(0, 50);
+      out = out.filter((e) => e.name.toLowerCase().includes(lq));
     }
-    // 无 query 时优先列目录
-    return entries.filter((e) => e.isDir || e.path.indexOf('/') === -1).slice(0, 50);
+    return out.slice(0, 200);
   } catch (_) {
     return [];
   }
+});
+
+// 保存粘贴的图片到工作区 .gui-assets/，返回相对路径（供输入框 @提及，claude 在 workspace 运行能读到）
+ipcMain.handle('claude:save-image', (_e, dataB64: string, ext: string) => {
+  syncWorkspace();
+  const dir = path.join(currentWorkspace(), '.gui-assets');
+  try { fs.mkdirSync(dir, { recursive: true }); } catch (_) {}
+  const safeExt = /^\.(png|jpg|jpeg|gif|webp|bmp)$/i.test('.' + ext) ? ext : 'png';
+  const name = `img-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${safeExt}`;
+  const full = path.join(dir, name);
+  try {
+    fs.writeFileSync(full, Buffer.from(dataB64, 'base64'));
+  } catch (e) {
+    return { error: '保存失败：' + (e as Error).message };
+  }
+  return { path: path.join('.gui-assets', name) };
+});
+
+// 读取工作区下的图片，返回 dataURL（供前端 <img> 显示，绕开 file:// 的 CSP 限制）
+ipcMain.handle('claude:read-image', (_e, relPath: string) => {
+  syncWorkspace();
+  // 只允许相对路径（防止读任意文件）；拼到工作区下
+  if (!relPath || path.isAbsolute(relPath) || relPath.includes('..')) return { error: 'invalid path' };
+  const full = path.join(currentWorkspace(), relPath);
+  try {
+    if (!fs.existsSync(full)) return { error: 'not found' };
+    const buf = fs.readFileSync(full);
+    const ext = path.extname(full).slice(1).toLowerCase().replace('jpg', 'jpeg') || 'png';
+    return { dataUrl: `data:image/${ext};base64,${buf.toString('base64')}` };
+  } catch (e) {
+    return { error: '读取失败：' + (e as Error).message };
+  }
+});
+
+// 同步主题到系统外观：mac 毛玻璃(vibrancy)的明暗跟随系统外观，
+// 切换 app 主题时设 nativeTheme，让毛玻璃也跟着变浅/变深
+ipcMain.handle('claude:set-native-theme', (_e, theme: 'light' | 'dark') => {
+  nativeTheme.themeSource = theme === 'light' ? 'light' : 'dark';
 });
 
 // 加载历史消息：从 claude session jsonl 文件解析对话历史
@@ -778,8 +865,12 @@ ipcMain.handle('claude:get-commands', () => {
   syncWorkspace();
   return new Promise<ClaudeItems>((resolve) => {
     const claudeBin = findClaude();
-    const cmds = ['-p', ' ', '--output-format', 'stream-json', '--verbose', '--max-turns', '1'];
     detectFlags();
+    // --max-turns 仅新版支持（2.1.34 的 --help 无此项），按探测结果决定是否加
+    // 注意：空格 prompt 在新版 claude 不返回 init 事件(拿不到 slash_commands)，
+    // 用一个极简有效 prompt，配 max-turns 1 让它拿到 init 后即可 kill，不真跑
+    const cmds = ['-p', '.', '--output-format', 'stream-json', '--verbose'];
+    if (maxTurnsSupport) cmds.push('--max-turns', '1');
     if (permFlag === 'mode') cmds.push('--permission-mode', 'acceptEdits');
     else if (permFlag === 'danger') cmds.push('--dangerously-skip-permissions');
     const proc = spawn(claudeBin, cmds, { cwd: workspace, env: process.env, shell: process.platform === 'win32' });
