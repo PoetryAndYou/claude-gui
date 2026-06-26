@@ -49,9 +49,11 @@ function ensureUserPath() {
     `${home}/.bun/bin`,
     '/opt/homebrew/bin',
     '/usr/local/bin',
-    // Windows nvm / npm 全局
+    // Windows nvm / npm 全局（注意 nvm 不是 nvml）
     `${home}/AppData/Roaming/npm`,
-    `${home}/AppData/Local/nvml`,
+    `${home}/AppData/Local/nvm`,
+    `${home}/.fnm`,
+    `${home}/scoop/shims`,
   ];
   const extra = extraDirs.filter((d) => {
     try { return existsSync(d); } catch (_) { return false; }
@@ -421,6 +423,26 @@ ipcMain.handle('claude:ask', (_e, prompt: string) => {
       }
 
       const claudeBin = findClaude();
+
+      // 启动前自检：验证 claudeBin 真能跑。失败就把诊断信息发给前端，
+      // 避免前端"一直思考"却不知道为什么（GUI 不继承 shell PATH，claude 常找不到）
+      try {
+        execSync(`${claudeBin} --version`, { encoding: 'utf8', timeout: 10000 });
+      } catch (verr) {
+        const home = require('os').homedir();
+        const diag = `无法启动 claude。可能原因：claude 未安装或不在 PATH 中。\n\n` +
+          `尝试执行的命令：${claudeBin} --version\n` +
+          `错误：${(verr as Error).message}\n\n` +
+          `请确认 claude 已安装：npm install -g @anthropic-ai/claude-code\n` +
+          `常见 claude 位置（确认存在其一）：\n` +
+          `  • ${home}\\AppData\\Roaming\\npm\\claude.cmd\n` +
+          `  • ${home}\\AppData\\Local\\nvm\\<版本>\\claude.cmd`;
+        sendConv(genConvId, 'claude:error', diag);
+        sendConv(genConvId, 'claude:status', 'error');
+        resolve();
+        return;
+      }
+
       sendConv(genConvId, 'claude:status', 'thinking');
       let buffer = '';
       let streamedAnyText = false;  // 是否已收到 text_delta（用于完整块兜底去重）
