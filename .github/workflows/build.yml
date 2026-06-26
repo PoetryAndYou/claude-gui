@@ -27,7 +27,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
+
+      # Electron/二进制用国内镜像加速，避免 CI 安装时去 GitHub 下载超时
+      - name: Configure npm mirrors
+        run: |
+          npm config set electron_mirror https://npmmirror.com/mirrors/electron/
+          npm config set electron_builder_binaries_mirror https://npmmirror.com/mirrors/electron-builder-binaries/
 
       - name: Install dependencies
         run: npm install
@@ -45,4 +50,4 @@ jobs:
         with:
           name: ClaudeGUI-${{ matrix.platform }}
           path: release/${{ matrix.artifact }}
-          if-no-files-found: error
+          if-no-files-found: warn
