@@ -400,10 +400,14 @@ ipcMain.handle('claude:ask', (_e, prompt: string) => {
       const sid = currentSessionId();
       const model = currentModel();
       const mode = currentMode();
-      detectFlags();  // 探测 claude 支持的 flag（按版本能力走，不支持就不传，避免卡死）
-      // 最稳的核心参数：所有版本都支持 -p + stream-json
+      detectFlags();  // 探测 claude 支持的 flag
+      // 参数：2.1.34 及以上都支持，探测到才加（探测不到则退化保证能跑）
       const args = ['-p', prompt, '--output-format', 'stream-json'];
-      // 权限放行（写文件必须，否则 -p 无法确认卡死）：探测到支持才加，不支持就不加优先保证能跑
+      // 逐字流式（实测 2.1.34 支持）
+      if (partialMsgSupport) {
+        args.push('--include-partial-messages');
+      }
+      // 权限放行（写文件刚需）
       if (permFlag === 'mode') {
         args.push('--permission-mode', mode);
       } else if (permFlag === 'danger') {
@@ -421,12 +425,15 @@ ipcMain.handle('claude:ask', (_e, prompt: string) => {
       // 启动前自检：验证 claudeBin 真能跑。失败就把诊断信息发给前端，
       // 避免前端"一直思考"却不知道为什么（GUI 不继承 shell PATH，claude 常找不到）
       try {
-        execSync(`${claudeBin} --version`, { encoding: 'utf8', timeout: 10000 });
+        // shell:true 和实际 spawn 一致（Windows .cmd 需要）
+        execSync(`"${claudeBin}" --version`, { encoding: 'utf8', timeout: 10000, shell: process.platform === 'win32' });
       } catch (verr) {
         const home = require('os').homedir();
-        const diag = `无法启动 claude。可能原因：claude 未安装或不在 PATH 中。\n\n` +
-          `尝试执行的命令：${claudeBin} --version\n` +
+        const pathHead = (process.env.PATH || '').split(path.delimiter).slice(0, 8).join('\n  • ');
+        const diag = `无法启动 claude。\n\n` +
+          `findClaude 返回的路径：${claudeBin}\n` +
           `错误：${(verr as Error).message}\n\n` +
+          `当前进程 PATH 前 8 项：\n  • ${pathHead}\n\n` +
           `请确认 claude 已安装：npm install -g @anthropic-ai/claude-code\n` +
           `常见 claude 位置（确认存在其一）：\n` +
           `  • ${home}\\AppData\\Roaming\\npm\\claude.cmd\n` +
