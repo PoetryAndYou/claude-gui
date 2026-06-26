@@ -7,3 +7,13 @@ release/
 *.AppImage
 .DS_Store
 tsconfig.tsbuildinfo
+
+# 防止误提交密钥/配置文件（含 API key / token）
+.env
+.env.*
+*.local
+.claude/
+**/.claude.json
+*.key
+*.pem
+secrets/
