@@ -88,18 +88,24 @@ function findClaude(): string {
 // 传不认的 flag 会直接退出报错 → GUI 卡死）。一次性探测，结果缓存。
 let flagCache: { ok: boolean; checked: boolean } = { ok: false, checked: false };
 let partialMsgSupport = false;
+// 放权方式优先级：新版的 --permission-mode > 老版的 --dangerously-skip-permissions > 无
+let permFlag: 'mode' | 'danger' | 'none' = 'none';
 function detectFlags() {
   if (flagCache.checked) return;
   flagCache.checked = true;
   try {
     const claudeBin = findClaude();
     const help = String(execSync(`${claudeBin} --help`, { encoding: 'utf8' }));
-    // --include-partial-messages 支持才用真流式（否则退化为完整块）
     partialMsgSupport = /include-partial-messages/.test(help);
+    // 新版优先用 --permission-mode（更细粒度），老版用 --dangerously-skip-permissions
+    if (/permission-mode/.test(help)) permFlag = 'mode';
+    else if (/dangerously-skip-permissions/.test(help)) permFlag = 'danger';
+    else permFlag = 'none';
     flagCache.ok = true;
   } catch (_) {
     // 探测失败（极旧版可能没有 --help）→ 保守退化，都不加
     partialMsgSupport = false;
+    permFlag = 'none';
     flagCache.ok = false;
   }
 }
@@ -399,9 +405,13 @@ ipcMain.handle('claude:ask', (_e, prompt: string) => {
       if (partialMsgSupport) {
         args.push('--include-partial-messages');
       }
-      // 权限模式：新版用 --permission-mode，老版不支持则不加（默认仍能读，但写可能需确认）
-      if (flagCache.ok) {
+      // 权限放行：按探测结果选可用方式（GUI 非交互必须放权，否则写文件卡死）
+      //   新版 --permission-mode：按对话模式(plan 只读 / acceptEdits/bypassPermissions 全放)
+      //   老版 --dangerously-skip-permissions：全放（无视模式选择，因老版不支持细粒度）
+      if (permFlag === 'mode') {
         args.push('--permission-mode', mode);
+      } else if (permFlag === 'danger') {
+        args.push('--dangerously-skip-permissions');
       }
       if (useResume && sid) {
         args.unshift('--resume', sid);
@@ -760,7 +770,8 @@ ipcMain.handle('claude:get-commands', () => {
     const claudeBin = findClaude();
     const cmds = ['-p', ' ', '--output-format', 'stream-json', '--verbose', '--max-turns', '1'];
     detectFlags();
-    if (flagCache.ok) cmds.push('--permission-mode', 'acceptEdits');
+    if (permFlag === 'mode') cmds.push('--permission-mode', 'acceptEdits');
+    else if (permFlag === 'danger') cmds.push('--dangerously-skip-permissions');
     const proc = spawn(claudeBin, cmds, { cwd: workspace, env: process.env, shell: process.platform === 'win32' });
     let collected = '';
     let resolved = false;
