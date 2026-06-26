@@ -32,6 +32,7 @@ const usageStyle: React.CSSProperties = {
 // 带复制按钮的代码块包装
 function CodeBlock({ language, children, theme }: { language: string; children: string; theme: Theme }) {
   const [copied, setCopied] = useState(false);
+  const [hovered, setHovered] = useState(false);
   const copy = () => {
     navigator.clipboard.writeText(children).then(() => {
       setCopied(true);
@@ -39,15 +40,18 @@ function CodeBlock({ language, children, theme }: { language: string; children: 
     });
   };
   return (
-    <div style={{ position: 'relative', margin: '8px 0' }}>
-      <button onClick={copy} style={copyBtnStyle}>
+    <div style={{ position: 'relative', margin: '8px 0' }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <button onClick={copy} style={copyBtnStyle(hovered, theme)}>
         <Icon name={copied ? 'check' : 'copy'} size={12} color={copied ? 'var(--green)' : 'var(--text-muted)'} />
         <span style={{ color: copied ? 'var(--green)' : 'var(--text-muted)' }}>{copied ? '已复制' : '复制'}</span>
       </button>
       <SyntaxHighlighter
         language={language}
         style={theme === 'light' ? (oneLight as any) : (vscDarkPlus as any)}
-        customStyle={{ margin: 0, borderRadius: 8, fontSize: 13 }}
+        customStyle={{ margin: 0, borderRadius: 8, fontSize: 13, paddingTop: 30 }}
       >
         {children}
       </SyntaxHighlighter>
@@ -72,13 +76,21 @@ function ThreeDotsSpinner() {
     </div>
   );
 }
-const copyBtnStyle: React.CSSProperties = {
-  position: 'absolute', top: 6, right: 6, zIndex: 2,
-  display: 'flex', alignItems: 'center', gap: 4,
-  background: 'rgba(13,17,23,.8)', border: '1px solid var(--border)',
-  borderRadius: 5, padding: '3px 8px', fontSize: 11, cursor: 'pointer',
-  backdropFilter: 'blur(4px)',
-};
+// 复制按钮：hover 才高亮（默认半透明不抢眼），背景随主题（白底下能看见）
+function copyBtnStyle(hovered: boolean, theme: Theme): React.CSSProperties {
+  return {
+    position: 'absolute', top: 6, right: 6, zIndex: 2,
+    display: 'flex', alignItems: 'center', gap: 4,
+    background: theme === 'light'
+      ? (hovered ? 'rgba(255,255,255,.95)' : 'rgba(255,255,255,.7)')
+      : (hovered ? 'rgba(22,27,34,.95)' : 'rgba(13,17,23,.7)'),
+    border: '1px solid var(--border)',
+    borderRadius: 5, padding: '3px 8px', fontSize: 11, cursor: 'pointer',
+    backdropFilter: 'blur(4px)',
+    opacity: hovered ? 1 : 0.7,
+    transition: 'opacity .12s',
+  };
+}
 
 // 操作按钮（hover 显示）
 function ActionBtn({ title, onClick, children }: { title: string; onClick: () => void; children: React.ReactNode }) {
