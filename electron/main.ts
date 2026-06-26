@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron';
-import { spawn, execSync, ChildProcessWithoutNullStreams } from 'child_process';
+import { spawn, execSync } from 'child_process';
+import type { ChildProcess } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -8,17 +9,19 @@ const isDev = !!process.env.VITE_DEV;
 let win: BrowserWindow | null = null;
 
 function createWindow() {
+  const isMac = process.platform === 'darwin';
   win = new BrowserWindow({
     width: 900,
     height: 680,
     minWidth: 480,
     minHeight: 400,
-    titleBarStyle: 'hiddenInset',
+    // mac: hiddenInset（红黄绿按钮内嵌）；Windows: 自定义无边框（无系统标题栏，靠 header 的 drag 区拖动）
+    titleBarStyle: isMac ? 'hiddenInset' : 'hidden',
     // mac 原生毛玻璃：窗口背景透明 + vibrancy，让侧边栏透出桌面/后方内容
-    transparent: process.platform === 'darwin',
-    vibrancy: process.platform === 'darwin' ? 'under-window' : undefined,
+    transparent: isMac,
+    vibrancy: isMac ? 'under-window' : undefined,
     visualEffectState: 'active',
-    backgroundColor: process.platform === 'darwin' ? '#00000000' : '#0d1117',
+    backgroundColor: isMac ? '#00000000' : '#0d1117',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -345,11 +348,11 @@ function makeTitle(text: string): string {
 }
 
 // 当前正在运行的 claude 进程（用于中断）
-let currentProc: ChildProcessWithoutNullStreams | null = null;
+let currentProc: ChildProcess | null = null;
 
 // 杀掉整个进程树：Windows 下 shell:true spawn 时，kill() 只杀外壳 cmd.exe，
 // 真正的 claude 子进程会变孤儿继续跑。用 taskkill /T 杀整树；其他平台直接 kill。
-function killProcTree(proc: ChildProcessWithoutNullStreams | null) {
+function killProcTree(proc: ChildProcess | null) {
   if (!proc || proc.exitCode != null) return;
   if (process.platform === 'win32') {
     try {
@@ -499,6 +502,9 @@ ipcMain.handle('claude:ask', (_e, prompt: string) => {
           cwd: workspace,
           env: process.env,
           shell: process.platform === 'win32',
+          // stdin 用 ignore 关闭：否则 Windows 上 claude.cmd 会卡在等 stdin（一直 thinking 不退出）
+          stdio: ['ignore', 'pipe', 'pipe'],
+          windowsHide: true,
         });
       } catch (e) {
         send('claude:error', `无法启动 claude: ${(e as Error).message}`);
@@ -595,7 +601,7 @@ ipcMain.handle('claude:ask', (_e, prompt: string) => {
       }
     };
 
-    currentProc.stdout.on('data', (chunk: Buffer) => {
+    currentProc!.stdout!.on('data', (chunk: Buffer) => {
       anyOutput = true;
       buffer += chunk.toString('utf8');
       const lines = buffer.split(/\r?\n/);
@@ -605,14 +611,28 @@ ipcMain.handle('claude:ask', (_e, prompt: string) => {
 
     // stderr 实时攒起来（旧版 claude 不认新 flag 会把 "unknown option" 写这里）
     let stderrBuf = '';
-    currentProc.stderr.on('data', (chunk: Buffer) => {
+    // 看门狗：claude 启动后若 25s 内无任何 stdout 输出，判为卡死（Win 下 stdin/.cmd 等坑），
+    // 报错 + 杀进程，避免前端永远转圈
+    let watchdog = setTimeout(() => {
+      if (!anyOutput) {
+        killProcTree(currentProc);
+        const hint = stderrBuf.trim()
+          ? `claude 启动后无响应。stderr：\n${stderrBuf.trim().slice(0, 500)}`
+          : 'claude 启动后 25 秒无响应（可能卡在等待 stdin，或 claude.cmd 调用异常）。\n'
+            + '请确认 Windows 上 claude 可用：在 PowerShell/命令提示符里跑 `claude --version`。';
+        sendConv(genConvId, 'claude:error', hint);
+        sendConv(genConvId, 'claude:status', 'error');
+        resolve();
+      }
+    }, 25000);
+    currentProc!.stderr!.on('data', (chunk: Buffer) => {
       stderrBuf += chunk.toString('utf8');
     });
 
     // 无自动超时（长回答不误杀）。用户可用停止按钮手动终止。
     // 启动即崩/PATH 错误等"真卡死"由 close 时的 anyOutput 检测兜底报错。
 
-    currentProc.on('error', (err) => {
+    currentProc!.on('error', (err) => {
       const msg = err.message.includes('ENOENT') || err.message.includes('spawn')
         ? `找不到 claude 命令。请确认已安装：npm install -g @anthropic-ai/claude-code\n（错误：${err.message}）`
         : `claude 启动失败: ${err.message}`;
@@ -621,7 +641,8 @@ ipcMain.handle('claude:ask', (_e, prompt: string) => {
       resolve();
     });
 
-    currentProc.on('close', (code) => {
+    currentProc!.on('close', (code) => {
+      clearTimeout(watchdog);
       if (buffer.trim()) onLine(buffer);
       if (retried) { resolve(); return; }
       // 启动即崩没输出（典型：旧版 claude 不认 --permission-mode / --include-partial-messages）
