@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useClaude, type Theme } from './hooks/useClaude';
 import { MessageList } from './components/MessageList';
 import { InputBox } from './components/InputBox';
+import { QueueList } from './components/QueueList';
 import { Sidebar } from './components/Sidebar';
 import { Icon } from './components/Icon';
 import { ModelSwitcher } from './components/ModelSwitcher';
@@ -26,7 +27,7 @@ export default function App() {
     regenerate, editAndResend,
     confirmEnabled, setConfirmEnabled,
     confirmApprove, confirmReject,
-    queue, clearQueue,
+    queue, clearQueue, removeQueueItem, runQueueItemNow,
   } = useClaude();
   const [draft, setDraft] = useState('');
   const draftRef = useRef<(text: string) => void>(() => {});
@@ -227,6 +228,14 @@ export default function App() {
             onEdit={editAndResend}
             onConfirmApprove={confirmApprove}
             onConfirmReject={confirmReject}
+          />
+
+          {/* 消息队列列表：输入框上方，显示排队消息（删除/立即执行） */}
+          <QueueList
+            queue={queue}
+            onRemove={removeQueueItem}
+            onRunNow={runQueueItemNow}
+            onClear={clearQueue}
           />
 
           <InputBox

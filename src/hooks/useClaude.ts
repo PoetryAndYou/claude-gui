@@ -424,8 +424,28 @@ export function useClaude() {
   // 清空消息队列（清空待发）
   const clearQueue = useCallback(() => {
     queueRef.current = [];
-    setQueue([]);
+    setQueue(queueRef.current);
   }, []);
+
+  // 删除队列中指定项
+  const removeQueueItem = useCallback((index: number) => {
+    queueRef.current = queueRef.current.filter((_, i) => i !== index);
+    setQueue(queueRef.current);
+  }, []);
+
+  // 立即执行队列中指定项：从队列移除该条，立即发送（插队，不等当前回复完）
+  // 仅在非 thinking 时有意义；thinking 时调 doSend 会入队，所以这里要求 idle 才执行
+  const runQueueItemNow = useCallback((index: number) => {
+    const item = queueRef.current[index];
+    if (item == null) return;
+    // 从队列移除
+    queueRef.current = queueRef.current.filter((_, i) => i !== index);
+    setQueue(queueRef.current);
+    // 立即发送（仅 idle 态；thinking 时这条会重新入队——但用户意图是插队，提示一下）
+    if (status !== 'thinking' && activeId) {
+      doSend(item, activeId, confirmEnabled);
+    }
+  }, [status, activeId, confirmEnabled, doSend]);
 
   // 变更确认：用户点「执行」→ 第二轮 acceptEdits 重跑；点「拒绝」→ 清掉确认卡片
   const confirmApprove = useCallback(async () => {
@@ -501,6 +521,6 @@ export function useClaude() {
     confirmEnabled, setConfirmEnabled,
     confirmApprove, confirmReject,
     // 消息队列
-    queue, clearQueue,
+    queue, clearQueue, removeQueueItem, runQueueItemNow,
   };
 }
