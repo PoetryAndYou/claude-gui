@@ -181,7 +181,7 @@ const wrapStyle: React.CSSProperties = {
 };
 const headerStyle: React.CSSProperties = {
   display: 'flex', alignItems: 'center', gap: 6,
-  padding: '8px 12px', background: 'rgba(88,166,255,.08)',
+  padding: '8px 12px', background: 'var(--accent-soft)',
   fontSize: 12.5, color: 'var(--text)',
 };
 const changeItemStyle: React.CSSProperties = {

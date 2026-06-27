@@ -368,7 +368,7 @@ export function InputBox({
                     padding: '3px 9px', borderRadius: 6, cursor: 'pointer',
                     fontFamily: 'inherit', fontSize: 11.5, fontWeight: 500,
                     border: confirmEnabled ? '1px solid var(--accent)' : '1px solid var(--border)',
-                    background: confirmEnabled ? 'rgba(88,166,255,.15)' : 'transparent',
+                    background: confirmEnabled ? 'var(--accent-soft)' : 'transparent',
                     color: confirmEnabled ? 'var(--accent)' : 'var(--text-muted)',
                     transition: 'all .15s',
                   }}
@@ -386,7 +386,7 @@ export function InputBox({
                     display: 'flex', alignItems: 'center', gap: 4,
                     padding: '3px 9px', borderRadius: 6, cursor: 'pointer',
                     fontFamily: 'inherit', fontSize: 11.5, fontWeight: 500,
-                    border: '1px solid var(--accent)', background: 'rgba(88,166,255,.15)',
+                    border: '1px solid var(--accent)', background: 'var(--accent-soft)',
                     color: 'var(--accent)', transition: 'all .15s',
                   }}
                   title={`${queueCount} 条排队中，点击清空`}
@@ -461,8 +461,8 @@ function SlashMenu({ items, idx, onPick, onHover }: {
 }
 
 function kindBadge(kind: string): React.CSSProperties {
-  const map: Record<string, string> = { '技能': '#bc8cff', '代理': '#3fb950', '命令': '#58a6ff' };
-  const c = map[kind] || '#58a6ff';
+  const map: Record<string, string> = { '技能': 'var(--purple)', '代理': 'var(--green)', '命令': 'var(--accent)' };
+  const c = map[kind] || 'var(--accent)';
   return {
     fontSize: 10, padding: '1px 5px', borderRadius: 3, fontWeight: 600,
     background: `${c}33`, color: c,

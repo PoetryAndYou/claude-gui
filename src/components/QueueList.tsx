@@ -61,7 +61,7 @@ const wrapStyle: React.CSSProperties = {
   margin: '0 12px 6px',
   border: '1px solid var(--accent)',
   borderRadius: 8,
-  background: 'rgba(88,166,255,.06)',
+  background: 'var(--accent-soft)',
   maxHeight: 200,
   overflowY: 'auto',
   flex: '0 0 auto',
@@ -70,7 +70,7 @@ const headerStyle: React.CSSProperties = {
   display: 'flex', alignItems: 'center', gap: 6,
   padding: '6px 10px', borderBottom: '1px solid var(--border-soft)',
   fontSize: 12, color: 'var(--text)',
-  position: 'sticky', top: 0, background: 'rgba(88,166,255,.1)',
+  position: 'sticky', top: 0, background: 'var(--accent-soft)',
 };
 const clearBtnStyle: React.CSSProperties = {
   marginLeft: 'auto', padding: '2px 8px', borderRadius: 5,

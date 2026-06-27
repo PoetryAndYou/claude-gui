@@ -13,18 +13,19 @@
   --text-muted: #8b949e;
   --text-faint: #6e7681;
   --text-fainter: #484f58;
-  --accent: #58a6ff;
-  --accent-2: #1f6feb;
-  --accent-soft: rgba(31,111,235,.12);
-  --purple: #bc8cff;
-  --green: #3fb950;
-  --red: #ff7b72;
+  /* 月光白主题：暖白月光作 accent，与深炭背景形成最纯粹高对比，不刺眼 */
+  --accent: #f0ede5;
+  --accent-2: #c9c9c9;
+  --accent-soft: rgba(240,237,229,.1);
+  --purple: #d2a8ff;
+  --green: #7ee787;
+  --red: #ff9382;
   --red-soft: rgba(248,81,73,.12);
   --red-border: rgba(248,81,73,.25);
   --red-border-strong: rgba(248,81,73,.45);
   --code-bg: rgba(110,118,129,.25);
   --code-inline-bg: rgba(110,118,129,.25);
-  --hover-overlay: rgba(177,186,196,.08);
+  --hover-overlay: rgba(240,237,229,.08);
   --shadow: rgba(0,0,0,.4);
 }
 
@@ -40,10 +41,11 @@ html.light {
   --text-muted: #57606a;
   --text-faint: #6e7781;
   --text-fainter: #8c959f;
-  --accent: #0969da;
-  --accent-2: #218bff;
-  --accent-soft: rgba(9,105,218,.1);
-  --purple: #8250df;
+  /* 浅色主题 accent 用深炭（与白底形成对立高对比），呼应深色主题的月光白 */
+  --accent: #1f2328;
+  --accent-2: #57606a;
+  --accent-soft: rgba(31,35,40,.08);
+  --purple: #6f42c1;
   --green: #1a7f37;
   --red: #cf222e;
   --red-soft: rgba(207,34,46,.1);
@@ -51,7 +53,7 @@ html.light {
   --red-border-strong: rgba(207,34,46,.45);
   --code-bg: rgba(175,184,193,.2);
   --code-inline-bg: rgba(175,184,193,.2);
-  --hover-overlay: rgba(208,215,222,.32);
+  --hover-overlay: rgba(31,35,40,.06);
   --shadow: rgba(140,149,159,.2);
 }
 
