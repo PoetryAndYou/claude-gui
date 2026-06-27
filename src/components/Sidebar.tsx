@@ -3,11 +3,11 @@ import type { ClaudeItems, Conversation } from '../../electron/preload';
 import type { Theme } from '../hooks/useClaude';
 import { ConversationList } from './ConversationList';
 import { Icon } from './Icon';
-import { SkillDetailModal } from './SkillDetailModal';
 
 export function Sidebar({
   theme,
   onPickCommand,
+  onOpenSkill,
   conversations,
   activeConvId,
   onSelectConv,
@@ -17,6 +17,7 @@ export function Sidebar({
 }: {
   theme: Theme;
   onPickCommand: (cmd: string) => void;
+  onOpenSkill: (skill: ClaudeItems['skills'][number]) => void;
   conversations: Conversation[];
   activeConvId: string | null;
   onSelectConv: (id: string) => void;
@@ -34,8 +35,6 @@ export function Sidebar({
   const [collapsed, setCollapsed] = useState<{ commands: boolean; skills: boolean; agents: boolean }>({
     commands: false, skills: false, agents: false,
   });
-  // 技能二级弹窗
-  const [skillModal, setSkillModal] = useState<ClaudeItems['skills'][number] | null>(null);
 
   // 工作空间随对话切换变化（每个对话绑定自己的工作目录）
   useEffect(() => {
@@ -114,7 +113,7 @@ export function Sidebar({
               renderItem={(s) => (
                 <button
                   key={s.name}
-                  onClick={() => setSkillModal(s)}
+                  onClick={() => onOpenSkill(s)}
                   style={itemStyle}
                   title={s.description}
                 >
@@ -146,16 +145,6 @@ export function Sidebar({
           </>
         )}
       </div>
-
-      {/* 技能二级弹窗 */}
-      <SkillDetailModal
-        skill={skillModal}
-        onClose={() => setSkillModal(null)}
-        onTrigger={(name) => {
-          setSkillModal(null);
-          onPickCommand('/' + name);
-        }}
-      />
     </div>
   );
 }

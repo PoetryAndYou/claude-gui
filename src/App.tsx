@@ -3,6 +3,7 @@ import { useClaude, type Theme } from './hooks/useClaude';
 import { MessageList } from './components/MessageList';
 import { InputBox } from './components/InputBox';
 import { QueueList } from './components/QueueList';
+import { SkillDetailModal } from './components/SkillDetailModal';
 import { Sidebar } from './components/Sidebar';
 import { Icon } from './components/Icon';
 import { ModelSwitcher } from './components/ModelSwitcher';
@@ -52,6 +53,8 @@ export default function App() {
 
   // ⌘P 命令面板
   const [paletteOpen, setPaletteOpen] = useState(false);
+  // 技能二级弹窗
+  const [skillModal, setSkillModal] = useState<{ name: string; description?: string; path?: string } | null>(null);
 
   // 模型列表（命令面板用），对话切换时刷新当前模型由 ModelSwitcher 自管
   const [models, setModels] = useState<ModelItem[]>([]);
@@ -201,6 +204,7 @@ export default function App() {
           <Sidebar
             theme={theme}
             onPickCommand={pickCommand}
+            onOpenSkill={setSkillModal}
             conversations={convList}
             activeConvId={activeId}
             onSelectConv={switchConv}
@@ -273,6 +277,16 @@ export default function App() {
         onSetModel={setModel}
         onSetMode={setMode}
         onPickDirectory={pickDirectory}
+      />
+
+      {/* 技能二级弹窗（顶层渲染，避免被侧栏 overflow 裁剪） */}
+      <SkillDetailModal
+        skill={skillModal}
+        onClose={() => setSkillModal(null)}
+        onTrigger={(name) => {
+          setSkillModal(null);
+          pickCommand('/' + name);
+        }}
       />
     </div>
   );
