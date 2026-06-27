@@ -322,18 +322,24 @@ export function useClaude() {
         setQueue(queueRef.current);
         return;
       }
-      // 若没有激活对话，先创建（首条消息作为标题）
+      // 若没有激活对话，先创建（首条消息作为标题），并把首条用户消息一起写入
       let curId = activeId;
+      const isFirst = !curId;
       if (!curId) {
         curId = await window.claude.conv.create(trimmed);
         const { conversations } = await window.claude.conv.list();
         setConvList(conversations);
         setActiveId(curId);
-        setConvs((prev) => ({ ...prev, [curId!]: { messages: [] } }));
       }
-      await doSend(trimmed, curId!, confirmEnabled);
+      // 立即显示用户消息（首次创建时一并初始化，避免两次 setConvs 状态竞争）
+      setConvs((prev) => {
+        const c = prev[curId!];
+        const baseMsgs = isFirst ? [] : (c?.messages ?? []);
+        return { ...prev, [curId!]: { messages: [...baseMsgs, { id: `u-${Date.now()}`, role: 'user', content: trimmed }] } };
+      });
+      await window.claude.ask(trimmed, confirmEnabled);
     },
-    [status, activeId, confirmEnabled, doSend],
+    [status, activeId, confirmEnabled],
   );
 
   /**
