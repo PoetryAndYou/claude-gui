@@ -170,7 +170,8 @@ interface PendingChange { toolUseId: string; name: string; input: unknown; }
 let pendingChanges: PendingChange[] = [];
 let pendingPrompt: string | null = null;   // 第一轮的 prompt，第二轮复用
 let confirmConvId: string | null = null;   // 当前等待确认的对话 id
-// 写/执行类工具（需要确认的）；只读工具（Read/Grep/Glob/WebSearch）不拦截
+// 写/执行类工具（需要确认的）；只读工具（Read/Grep/Glob/WebSearch）和提问类（AskUserQuestion）不拦截
+// Task = 子 agent 执行（可能含写操作），需确认；AskUserQuestion 只是提问，不拦截
 const WRITE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'Bash', 'Task']);
 
 // 跨平台目录递归扫描（替代 Unix find，Windows 也能用）
