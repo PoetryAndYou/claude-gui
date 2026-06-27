@@ -17,6 +17,8 @@ export default function App() {
     convList, activeId,
     send, stop, newChat, switchConv, deleteConv, renameConv, loadCommands,
     regenerate, editAndResend,
+    confirmEnabled, setConfirmEnabled,
+    confirmApprove, confirmReject,
   } = useClaude();
   const [draft, setDraft] = useState('');
   const draftRef = useRef<(text: string) => void>(() => {});
@@ -182,6 +184,8 @@ export default function App() {
             theme={theme}
             onRegenerate={regenerate}
             onEdit={editAndResend}
+            onConfirmApprove={confirmApprove}
+            onConfirmReject={confirmReject}
           />
 
           <InputBox
@@ -192,6 +196,8 @@ export default function App() {
             registerDraftSetter={(fn) => (draftRef.current = fn)}
             commands={commands}
             onLoadCommands={loadCommands}
+            confirmEnabled={confirmEnabled}
+            onToggleConfirm={() => setConfirmEnabled(!confirmEnabled)}
           />
         </div>
       </div>

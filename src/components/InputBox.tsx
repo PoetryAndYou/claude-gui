@@ -13,6 +13,8 @@ export function InputBox({
   registerDraftSetter,
   commands,
   onLoadCommands,
+  confirmEnabled,
+  onToggleConfirm,
 }: {
   onSend: (text: string) => void;
   onStop: () => void;
@@ -21,6 +23,8 @@ export function InputBox({
   registerDraftSetter: (fn: (text: string) => void) => void;
   commands: ClaudeItems;
   onLoadCommands: () => void;
+  confirmEnabled?: boolean;
+  onToggleConfirm?: () => void;
 }) {
   const [text, setText] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -356,6 +360,24 @@ export function InputBox({
               <button onClick={insertAt} style={toolBtnStyle} title="提及文件">
                 <span style={{ fontSize: 16, color: 'var(--text-muted)', fontWeight: 500, lineHeight: 1 }}>@</span>
               </button>
+              {onToggleConfirm && (
+                <button
+                  onClick={onToggleConfirm}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 4,
+                    padding: '3px 9px', borderRadius: 6, cursor: 'pointer',
+                    fontFamily: 'inherit', fontSize: 11.5, fontWeight: 500,
+                    border: confirmEnabled ? '1px solid var(--accent)' : '1px solid var(--border)',
+                    background: confirmEnabled ? 'rgba(88,166,255,.15)' : 'transparent',
+                    color: confirmEnabled ? 'var(--accent)' : 'var(--text-muted)',
+                    transition: 'all .15s',
+                  }}
+                  title={confirmEnabled ? '变更前确认：开启（写操作需确认后执行）' : '变更前确认：关闭'}
+                >
+                  <Icon name="edit" size={13} color={confirmEnabled ? 'var(--accent)' : 'var(--text-muted)'} />
+                  <span>确认</span>
+                </button>
+              )}
               {text && (
                 <button onClick={() => { setText(''); focusTextarea(); }} style={toolBtnStyle} title="清空">
                   <Icon name="trash" size={15} color="var(--text-muted)" />

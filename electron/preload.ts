@@ -31,6 +31,13 @@ export interface ToolEvent {
   isError?: boolean;        // tool_result 是否出错
 }
 
+// 变更确认：第一轮（default 模式）抓到的写/执行类工具意图，发给前端确认
+export interface PendingChange {
+  toolUseId: string;
+  name: string;       // Write / Edit / MultiEdit / Bash / Task ...
+  input: unknown;     // 完整参数（文件路径、内容、命令等）
+}
+
 export interface Conversation {
   id: string;
   title: string;
@@ -57,14 +64,19 @@ export interface ConvAPI {
 }
 
 export interface ClaudeAPI {
-  ask: (prompt: string) => Promise<void>;
+  ask: (prompt: string, confirmEnabled?: boolean) => Promise<void>;
   stop: () => Promise<void>;
   newChat: () => Promise<string>;
+  // 变更确认（两轮调用）
+  confirmApprove: () => Promise<void>;   // 用户点「执行」→ 第二轮 acceptEdits 重跑
+  confirmReject: () => Promise<void>;    // 用户点「拒绝」→ 清空待确认状态
   onChunk: (cb: (convId: string, text: string) => void) => void;
   onStatus: (cb: (convId: string, status: string) => void) => void;
   onError: (cb: (convId: string, msg: string) => void) => void;
   onUsage: (cb: (convId: string, usage: Usage) => void) => void;
   onEvent: (cb: (convId: string, event: ToolEvent) => void) => void;
+  // 第一轮抓到写操作意图时触发，前端展示确认卡片
+  onConfirmRequest: (cb: (convId: string, changes: PendingChange[]) => void) => void;
   // 工作空间
   getWorkspace: () => Promise<string>;
   setWorkspace: (dir: string) => Promise<string>;
@@ -95,9 +107,12 @@ export interface ClaudeAPI {
 }
 
 contextBridge.exposeInMainWorld('claude', {
-  ask: (prompt: string) => ipcRenderer.invoke('claude:ask', prompt),
+  ask: (prompt: string, confirmEnabled?: boolean) => ipcRenderer.invoke('claude:ask', prompt, !!confirmEnabled),
   stop: () => ipcRenderer.invoke('claude:stop'),
   newChat: () => ipcRenderer.invoke('claude:new-chat'),
+  // 变更确认
+  confirmApprove: () => ipcRenderer.invoke('claude:confirm-approve'),
+  confirmReject: () => ipcRenderer.invoke('claude:confirm-reject'),
   onChunk: (cb: (convId: string, text: string) => void) =>
     ipcRenderer.on('claude:chunk', (_e, convId, text) => cb(convId, text)),
   onStatus: (cb: (convId: string, status: string) => void) =>
@@ -108,6 +123,8 @@ contextBridge.exposeInMainWorld('claude', {
     ipcRenderer.on('claude:usage', (_e, convId, usage) => cb(convId, usage)),
   onEvent: (cb: (convId: string, event: ToolEvent) => void) =>
     ipcRenderer.on('claude:event', (_e, convId, event) => cb(convId, event)),
+  onConfirmRequest: (cb: (convId: string, changes: PendingChange[]) => void) =>
+    ipcRenderer.on('claude:confirm-request', (_e, convId, changes) => cb(convId, changes)),
   getWorkspace: () => ipcRenderer.invoke('claude:get-workspace'),
   setWorkspace: (dir: string) => ipcRenderer.invoke('claude:set-workspace', dir),
   pickDirectory: () => ipcRenderer.invoke('claude:pick-directory'),

@@ -1,17 +1,21 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { MessageBubble } from './MessageBubble';
+import { ConfirmCard } from './ConfirmCard';
 import { Icon } from './Icon';
 import type { Message, ChatStatus, Theme } from '../hooks/useClaude';
 
 export function MessageList({
   messages, status, theme,
   onRegenerate, onEdit,
+  onConfirmApprove, onConfirmReject,
 }: {
   messages: Message[];
   status: ChatStatus;
   theme: Theme;
   onRegenerate?: (assistantMsgId: string) => void;
   onEdit?: (userMsgId: string, newText: string) => void;
+  onConfirmApprove?: () => void;
+  onConfirmReject?: () => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -67,15 +71,24 @@ export function MessageList({
       <div ref={scrollRef} style={{ height: '100%', overflowY: 'auto', padding: '10px 10px' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 820, margin: '0 auto' }}>
           {messages.map((m) => (
-            <MessageBubble
-              key={m.id}
-              message={m}
-              streaming={m.id === streamingId}
-              theme={theme}
-              canAct={canAct}
-              onRegenerate={m.role === 'assistant' ? () => onRegenerate?.(m.id) : undefined}
-              onEdit={m.role === 'user' ? (t) => onEdit?.(m.id, t) : undefined}
-            />
+            <div key={m.id}>
+              <MessageBubble
+                message={m}
+                streaming={m.id === streamingId}
+                theme={theme}
+                canAct={canAct}
+                onRegenerate={m.role === 'assistant' ? () => onRegenerate?.(m.id) : undefined}
+                onEdit={m.role === 'user' ? (t) => onEdit?.(m.id, t) : undefined}
+              />
+              {/* 变更确认卡片：第一轮（default 模式）抓到写操作时展示 */}
+              {m.role === 'assistant' && m.pendingChanges && m.pendingChanges.length > 0 && (
+                <ConfirmCard
+                  changes={m.pendingChanges}
+                  onApprove={() => onConfirmApprove?.()}
+                  onReject={() => onConfirmReject?.()}
+                />
+              )}
+            </div>
           ))}
           <div ref={bottomRef} />
         </div>

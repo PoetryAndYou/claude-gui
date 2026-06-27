@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { Conversation, ClaudeItems, Usage, ToolEvent } from '../../electron/preload';
+import type { Conversation, ClaudeItems, Usage, ToolEvent, PendingChange } from '../../electron/preload';
 
 export interface Message {
   id: string;
@@ -9,6 +9,7 @@ export interface Message {
   events?: ToolEvent[];   // 仅助手消息：思考/工具调用过程（Codex 式展示）
   error?: boolean;        // 标记出错的消息
   startedAt?: number;     // 助手消息：开始思考的时间戳（前端墙钟计时用）
+  pendingChanges?: PendingChange[];  // 第一轮抓到的写操作意图（确认卡片用）
 }
 
 export type ChatStatus = 'idle' | 'thinking' | 'error';
@@ -32,6 +33,8 @@ export function useClaude() {
   const [status, setStatus] = useState<ChatStatus>('idle');
   const [error, setError] = useState<string>('');
   const [commands, setCommands] = useState<ClaudeItems>(EMPTY_ITEMS);
+  // 变更前确认开关（用户在输入框旁勾选）；开启后每次 send 走两轮：先 default 预览再确认执行
+  const [confirmEnabled, setConfirmEnabled] = useState(false);
   const inited = useRef(false);
 
   // 每个对话独立的 streaming 状态（切换不打断）
@@ -136,6 +139,30 @@ export function useClaude() {
         if (convId === activeIdRef.current) {
           setStatus(s === 'done' ? 'idle' : 'error');
         }
+      } else if (s === 'awaiting-confirm') {
+        // 第一轮结束、等待用户确认：不解除 thinking 状态（仍在等待），保留 streaming 消息可继续接收
+        // flush 残留 buffer，但不删 streamingIds（确认后第二轮会复用或新建）
+        if (flushRaf.current != null) {
+          cancelAnimationFrame(flushRaf.current);
+          flushRaf.current = null;
+        }
+        const pending = chunkBuf.current[convId];
+        delete chunkBuf.current[convId];
+        if (pending) {
+          setConvs((prev) => {
+            const c = prev[convId];
+            if (!c) return prev;
+            const sid = streamingIds.current[convId];
+            const last = c.messages[c.messages.length - 1];
+            const target = sid ? c.messages.find((m) => m.id === sid) : last;
+            if (!target || target.role !== 'assistant') return prev;
+            return {
+              ...prev,
+              [convId]: { messages: c.messages.map((m) => m.id === target.id ? { ...m, content: (m.content || '') + pending } : m) },
+            };
+          });
+        }
+        // 保持 thinking 状态（用户看到"等待确认"，不显示输入框）
       }
     });
     api.onError((convId, msg) => {
@@ -212,6 +239,21 @@ export function useClaude() {
         };
       });
     });
+    // 变更确认请求：第一轮抓到写操作，挂到当前助手消息的 pendingChanges 上（前端渲染确认卡片）
+    api.onConfirmRequest((convId, changes) => {
+      const sid = streamingIds.current[convId];
+      if (!sid || !changes || changes.length === 0) return;
+      setConvs((prev) => {
+        const c = prev[convId];
+        if (!c) return prev;
+        return {
+          ...prev,
+          [convId]: {
+            messages: c.messages.map((m) => (m.id === sid ? { ...m, pendingChanges: changes } : m)),
+          },
+        };
+      });
+    });
   }, []);
 
   const messages = activeId ? convs[activeId]?.messages ?? [] : [];
@@ -238,9 +280,9 @@ export function useClaude() {
         const c = prev[curId!];
         return { ...prev, [curId!]: { messages: [...(c?.messages ?? []), { id: `u-${Date.now()}`, role: 'user', content: trimmed }] } };
       });
-      await window.claude.ask(trimmed);
+      await window.claude.ask(trimmed, confirmEnabled);
     },
-    [status, activeId],
+    [status, activeId, confirmEnabled],
   );
 
   /**
@@ -268,9 +310,9 @@ export function useClaude() {
         if (!c) return prev;
         return { ...prev, [activeId!]: { messages: c.messages.slice(0, userIdx) } };
       });
-      await window.claude.ask(userText);
+      await window.claude.ask(userText, confirmEnabled);
     },
-    [activeId, status, convs],
+    [activeId, status, convs, confirmEnabled],
   );
 
   /**
@@ -300,12 +342,32 @@ export function useClaude() {
         const c = prev[activeId!];
         return { ...prev, [activeId!]: { messages: [...(c?.messages ?? []), { id: `u-${Date.now()}`, role: 'user', content: trimmed }] } };
       });
-      await window.claude.ask(trimmed);
+      await window.claude.ask(trimmed, confirmEnabled);
     },
-    [activeId, status, convs],
+    [activeId, status, convs, confirmEnabled],
   );
 
   const stop = useCallback(() => window.claude.stop(), []);
+
+  // 变更确认：用户点「执行」→ 第二轮 acceptEdits 重跑；点「拒绝」→ 清掉确认卡片
+  const confirmApprove = useCallback(async () => {
+    await window.claude.confirmApprove();
+  }, []);
+  const confirmReject = useCallback(async () => {
+    await window.claude.confirmReject();
+    // 清掉当前助手消息上的确认卡片
+    if (!activeId) return;
+    setConvs((prev) => {
+      const c = prev[activeId];
+      if (!c) return prev;
+      return {
+        ...prev,
+        [activeId]: {
+          messages: c.messages.map((m) => (m.pendingChanges ? { ...m, pendingChanges: undefined } : m)),
+        },
+      };
+    });
+  }, [activeId]);
 
   const newChat = useCallback(async () => {
     const id = await window.claude.conv.create();
@@ -357,5 +419,8 @@ export function useClaude() {
     send, stop, newChat, switchConv, deleteConv, renameConv, loadCommands,
     regenerate, editAndResend,
     fireAsk,
+    // 变更前确认
+    confirmEnabled, setConfirmEnabled,
+    confirmApprove, confirmReject,
   };
 }

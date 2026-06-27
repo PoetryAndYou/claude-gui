@@ -141,22 +141,37 @@ function detectFlags() {
   flagCache.checked = true;
   try {
     const claudeBin = findClaude();
-    const help = execClaude(claudeBin, '--help');
-    partialMsgSupport = /include-partial-messages/.test(help);
-    maxTurnsSupport = /max-turns/.test(help);
-    // 新版优先用 --permission-mode（更细粒度），老版用 --dangerously-skip-permissions
-    if (/permission-mode/.test(help)) permFlag = 'mode';
-    else if (/dangerously-skip-permissions/.test(help)) permFlag = 'danger';
-    else permFlag = 'none';
+    // 注意：claude --help 在 Electron 环境下输出被截断（~8KB，缺 permission-mode），
+    // 不能靠 --help 探测。改用更可靠的方式：直接试 --permission-mode 参数是否被接受。
+    // 2.1.34+ 全部支持 --permission-mode，且即使老版不识别也只会报 unknown option（不影响主流程）。
+    // 所以默认就认为支持（partial-messages 同理，靠 --help 不可靠）。
+    partialMsgSupport = true;   // 2.1.34+ 支持，实测可靠
+    maxTurnsSupport = true;
+    permFlag = 'mode';          // 优先用 --permission-mode（确认功能依赖它）
     flagCache.ok = true;
-  } catch (_) {
-    // 探测失败（极旧版可能没有 --help）→ 保守退化，都不加
-    partialMsgSupport = false;
-    maxTurnsSupport = false;
-    permFlag = 'none';
+  } catch (e) {
+    // findClaude 失败才走这里
+    partialMsgSupport = true;
+    maxTurnsSupport = true;
+    permFlag = 'mode';
     flagCache.ok = false;
   }
 }
+
+// ──────────────────────────────────────────────
+// 两轮调用：变更前确认
+// 实测：headless 模式下 claude 权限不会暂停等用户（要么自动放行要么自动拒绝）。
+// 所以用两轮：第一轮 default 模式让 claude 尝试写操作→被拒→但我们已抓到 tool_use 意图；
+// 前端展示这些意图 + diff，用户点「执行」→ 第二轮 acceptEdits 重跑相同 prompt 真正落地。
+// 仅在对话开启「变更前确认」时走两轮，默认关闭（保持原有 acceptEdits 单轮体验）。
+// ──────────────────────────────────────────────
+// 当前等待用户确认的变更意图（第一轮收集到的写工具调用）
+interface PendingChange { toolUseId: string; name: string; input: unknown; }
+let pendingChanges: PendingChange[] = [];
+let pendingPrompt: string | null = null;   // 第一轮的 prompt，第二轮复用
+let confirmConvId: string | null = null;   // 当前等待确认的对话 id
+// 写/执行类工具（需要确认的）；只读工具（Read/Grep/Glob/WebSearch）不拦截
+const WRITE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'Bash', 'Task']);
 
 // 跨平台目录递归扫描（替代 Unix find，Windows 也能用）
 // maxDepth: 最大深度；返回找到的文件/目录绝对路径数组
@@ -436,13 +451,24 @@ ipcMain.handle('claude:set-mode', (_e, mode: string | null) => {
 });
 
 // 启动一次 claude 对话
-ipcMain.handle('claude:ask', (_e, prompt: string) => {
+// confirmEnabled: 是否走两轮（第一轮 default 预览，第二轮 acceptEdits 执行）
+// 核心执行体：抽出来供 claude:ask 和 claude:confirm-approve 复用
+function executeAsk(prompt: string, confirmEnabled: boolean): Promise<void> {
   return new Promise<void>((resolve) => {
     let retried = false;
     // 记住本次生成属于哪个对话，切对话不影响后台 chunk 路由
     const genConvId = activeConvId;
+    // 降级保护：确认模式依赖 --permission-mode（default/acceptEdits 切换）。
+    // 探测不到 permission-mode 的极旧版 claude，强制退化为单轮 execute，保证不崩。
+    detectFlags();
+    if (confirmEnabled && permFlag !== 'mode') {
+      confirmEnabled = false;
+    }
+    // 第一轮前清空收集到的变更意图
+    if (confirmEnabled) { pendingChanges = []; pendingPrompt = prompt; confirmConvId = genConvId; }
 
-    const runOnce = (useResume: boolean) => {
+    // phase: 'preview' = 第一轮(default 模式抓意图)，'execute' = 第二轮(acceptEdits 真跑)
+    const runOnce = (useResume: boolean, phase: 'preview' | 'execute' = 'execute') => {
       syncWorkspace();  // 用当前对话的工作目录
       clearStreamTimers();  // 清掉上一轮残留的吐字定时器
       const sid = currentSessionId();
@@ -456,9 +482,13 @@ ipcMain.handle('claude:ask', (_e, prompt: string) => {
       if (partialMsgSupport) {
         args.push('--include-partial-messages');
       }
-      // 权限放行（写文件刚需）
+      // 权限放行：
+      // - preview 阶段强制 default（写操作被拒，但我们能抓到 tool_use 意图）
+      // - execute 阶段用 acceptEdits/bypassPermissions 真正执行
+      // - 未开启确认时，按对话原有 mode 走（单轮）
+      const effectiveMode = phase === 'preview' ? 'default' : mode;
       if (permFlag === 'mode') {
-        args.push('--permission-mode', mode);
+        args.push('--permission-mode', effectiveMode);
       } else if (permFlag === 'danger') {
         args.push('--dangerously-skip-permissions');
       }
@@ -546,6 +576,10 @@ ipcMain.handle('claude:ask', (_e, prompt: string) => {
         else if (obj.type === 'assistant' && Array.isArray(obj.message?.content)) {
           for (const block of obj.message.content) {
             if (block.type === 'tool_use') {
+              // preview 阶段：收集写/执行类工具的意图（default 模式下这些会被拒，但参数已拿到）
+              if (phase === 'preview' && WRITE_TOOLS.has(block.name)) {
+                pendingChanges.push({ toolUseId: block.id, name: block.name, input: block.input });
+              }
               sendConv(genConvId, 'claude:event', {
                 kind: 'tool_use',
                 toolUseId: block.id,
@@ -587,7 +621,7 @@ ipcMain.handle('claude:ask', (_e, prompt: string) => {
           if (c) { c.sessionId = null; saveConversations(); }
           killProcTree(currentProc);
           sendConv(genConvId, 'claude:chunk', '\n（会话已失效，重新发起…）\n');
-          setTimeout(() => runOnce(false), 200);
+          setTimeout(() => runOnce(false, phase), 200);
           return;
         }
         if (obj.session_id) {
@@ -597,7 +631,13 @@ ipcMain.handle('claude:ask', (_e, prompt: string) => {
         // 用量：result 事件里带 usage / duration_ms / total_cost_usd，发给前端展示
         const usage = extractUsage(obj);
         if (usage) sendConv(genConvId, 'claude:usage', usage);
-        sendConv(genConvId, 'claude:status', 'done');
+        // preview 阶段结束：若收集到写操作意图，发确认请求（不直接 done），等用户点执行
+        if (phase === 'preview' && pendingChanges.length > 0 && confirmConvId === genConvId) {
+          sendConv(genConvId, 'claude:confirm-request', pendingChanges);
+          sendConv(genConvId, 'claude:status', 'awaiting-confirm');
+        } else {
+          sendConv(genConvId, 'claude:status', 'done');
+        }
       }
     };
 
@@ -644,15 +684,53 @@ ipcMain.handle('claude:ask', (_e, prompt: string) => {
       }
       // 等流式吐完再标记完成
       const pendingDelay = streamMaxDelay;
-      const finish = () => { sendConv(genConvId, 'claude:status', 'done'); currentProc = null; resolve(); };
+      // preview 阶段：result 事件已发 awaiting-confirm（或 done），close 不再强制覆盖状态
+      // execute 阶段或未开启确认：正常标记 done
+      const finish = () => {
+        if (phase !== 'preview' || pendingChanges.length === 0 || confirmConvId !== genConvId) {
+          sendConv(genConvId, 'claude:status', 'done');
+        }
+        currentProc = null;
+        resolve();
+      };
       if (pendingDelay > 0) setTimeout(finish, pendingDelay + 60);
       else finish();
     });
   };
 
     // 启动首次执行（带 --resume，失败会自动降级）
-    runOnce(true);
+    // confirmEnabled: 第一轮用 preview（default 模式抓意图）；否则直接 execute
+    runOnce(true, confirmEnabled ? 'preview' : 'execute');
   });
+}
+
+// 发起对话（前端入口）
+ipcMain.handle('claude:ask', (_e, prompt: string, confirmEnabled = false) => {
+  return executeAsk(prompt, confirmEnabled);
+});
+
+// 用户点「执行」：用 acceptEdits 重跑第一轮的 prompt（第二轮真正落地）
+ipcMain.handle('claude:confirm-approve', () => {
+  if (!pendingPrompt || !confirmConvId) return;
+  const prompt = pendingPrompt;
+  const cid = confirmConvId;
+  // 清空待确认状态
+  pendingChanges = [];
+  pendingPrompt = null;
+  confirmConvId = null;
+  // 第二轮：切到目标对话，execute phase（acceptEdits/bypassPermissions 真正执行）
+  activeConvId = cid;
+  sendConv(cid, 'claude:status', 'thinking');
+  return executeAsk(prompt, false);
+});
+
+// 用户点「拒绝」：清空待确认状态，标记对话结束
+ipcMain.handle('claude:confirm-reject', () => {
+  const cid = confirmConvId;
+  pendingChanges = [];
+  pendingPrompt = null;
+  confirmConvId = null;
+  if (cid) sendConv(cid, 'claude:status', 'done');
 });
 
 // 中断当前对话
@@ -660,6 +738,10 @@ ipcMain.handle('claude:stop', () => {
   clearStreamTimers();  // 停掉还没吐完的文字
   killProcTree(currentProc);  // 杀进程树（Windows 下否则孤儿继续跑，前端终止无反应）
   currentProc = null;
+  // 清空待确认状态（避免 stop 后还残留确认卡片）
+  pendingChanges = [];
+  pendingPrompt = null;
+  confirmConvId = null;
   send('claude:status', 'done');
 });
 
