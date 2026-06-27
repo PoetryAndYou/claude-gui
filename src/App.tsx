@@ -11,6 +11,13 @@ import type { ModelItem } from '../electron/preload';
 
 const THEME_KEY = 'claude-gui-theme';
 
+// Windows 无边框窗口控制按钮样式（最小化/最大化/关闭）
+const winBtnStyle: React.CSSProperties = {
+  width: 38, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center',
+  background: 'transparent', border: 'none', cursor: 'pointer',
+  color: 'var(--text-muted)', fontFamily: 'inherit', transition: 'background .12s',
+};
+
 export default function App() {
   const {
     messages, status, error, commands,
@@ -109,6 +116,7 @@ export default function App() {
         padding: '0 10px 0 14px', borderBottom: '1px solid var(--border-soft)',
         // mac：透毛玻璃；Windows/Linux：实色跟随主题（无毛玻璃，否则透出窗口黑底）
         background: isMac ? 'transparent' : 'var(--bg-elev-2)',
+        // 自定义无边框标题栏：整个 header 可拖动窗口，按钮区域设 no-drag
         WebkitAppRegion: 'drag',
       } as React.CSSProperties}>
         <span style={{ width: isMac ? 64 : 0, flex: '0 0 auto' }} />
@@ -150,6 +158,38 @@ export default function App() {
           >
             <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={15} color="var(--text-muted)" />
           </button>
+          {/* Windows/Linux 窗口控制按钮（mac 用原生红黄绿） */}
+          {!isMac && (
+            <div className="no-drag" style={{ display: 'flex', marginLeft: 4, marginRight: -10 }}>
+              <button
+                onClick={() => window.claude.win.minimize()}
+                title="最小化"
+                style={winBtnStyle}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(128,128,128,.18)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+              >
+                <svg width="11" height="11" viewBox="0 0 11 11"><rect x="1" y="5" width="9" height="1" fill="currentColor"/></svg>
+              </button>
+              <button
+                onClick={() => window.claude.win.maximizeToggle()}
+                title="最大化/还原"
+                style={winBtnStyle}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(128,128,128,.18)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+              >
+                <svg width="11" height="11" viewBox="0 0 11 11"><rect x="1.5" y="1.5" width="8" height="8" fill="none" stroke="currentColor" strokeWidth="1"/></svg>
+              </button>
+              <button
+                onClick={() => window.claude.win.close()}
+                title="关闭"
+                style={{ ...winBtnStyle, borderBottomRightRadius: 6 }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = '#e81123'; e.currentTarget.style.color = '#fff'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}
+              >
+                <svg width="11" height="11" viewBox="0 0 11 11"><path d="M1 1 L10 10 M10 1 L1 10" stroke="currentColor" strokeWidth="1.2"/></svg>
+              </button>
+            </div>
+          )}
         </div>
       </header>
 

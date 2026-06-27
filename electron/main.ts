@@ -15,8 +15,10 @@ function createWindow() {
     height: 680,
     minWidth: 480,
     minHeight: 400,
-    // mac: hiddenInset（红黄绿按钮内嵌）；Windows: 自定义无边框（无系统标题栏，靠 header 的 drag 区拖动）
+    // mac: hiddenInset（红黄绿按钮内嵌）；Windows: 自定义无边框（前端自绘最小化/最大化/关闭按钮）
     titleBarStyle: isMac ? 'hiddenInset' : 'hidden',
+    // Windows 无边框需要 frame:false（隐藏整个系统标题栏），mac 用 hiddenInset 即可
+    frame: isMac,
     // mac 原生毛玻璃：窗口背景透明 + vibrancy，让侧边栏透出桌面/后方内容
     transparent: isMac,
     vibrancy: isMac ? 'under-window' : undefined,
@@ -36,6 +38,17 @@ function createWindow() {
     win.loadFile(path.join(__dirname, '../dist/index.html'));
   }
 }
+
+// ──────────────────────────────────────────────
+// 窗口控制（无边框窗口自绘按钮用）
+// ──────────────────────────────────────────────
+ipcMain.on('win:minimize', () => win?.minimize());
+ipcMain.on('win:maximize-toggle', () => {
+  if (!win) return;
+  if (win.isMaximized()) win.unmaximize();
+  else win.maximize();
+});
+ipcMain.on('win:close', () => win?.close());
 
 // ──────────────────────────────────────────────
 // claude CLI 调用层

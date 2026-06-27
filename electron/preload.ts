@@ -106,6 +106,12 @@ export interface ClaudeAPI {
   loadHistory: (sessionId: string) => Promise<{ id: string; role: 'user' | 'assistant'; content: string }[]>;
   // 对话管理
   conv: ConvAPI;
+  // 窗口控制（无边框窗口自绘按钮）
+  win: {
+    minimize: () => void;
+    maximizeToggle: () => void;
+    close: () => void;
+  };
 }
 
 contextBridge.exposeInMainWorld('claude', {
@@ -152,5 +158,10 @@ contextBridge.exposeInMainWorld('claude', {
     switch: (id: string) => ipcRenderer.invoke('conv:switch', id),
     delete: (id: string) => ipcRenderer.invoke('conv:delete', id),
     rename: (id: string, title: string) => ipcRenderer.invoke('conv:rename', id, title),
+  },
+  win: {
+    minimize: () => ipcRenderer.send('win:minimize'),
+    maximizeToggle: () => ipcRenderer.send('win:maximize-toggle'),
+    close: () => ipcRenderer.send('win:close'),
   },
 } satisfies ClaudeAPI);
