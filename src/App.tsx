@@ -26,6 +26,7 @@ export default function App() {
     regenerate, editAndResend,
     confirmEnabled, setConfirmEnabled,
     confirmApprove, confirmReject,
+    queue, clearQueue,
   } = useClaude();
   const [draft, setDraft] = useState('');
   const draftRef = useRef<(text: string) => void>(() => {});
@@ -238,6 +239,8 @@ export default function App() {
             onLoadCommands={loadCommands}
             confirmEnabled={confirmEnabled}
             onToggleConfirm={() => setConfirmEnabled(!confirmEnabled)}
+            queueCount={queue.length}
+            onClearQueue={clearQueue}
           />
         </div>
       </div>

@@ -35,6 +35,9 @@ export function useClaude() {
   const [commands, setCommands] = useState<ClaudeItems>(EMPTY_ITEMS);
   // 变更前确认开关（用户在输入框旁勾选）；开启后每次 send 走两轮：先 default 预览再确认执行
   const [confirmEnabled, setConfirmEnabled] = useState(false);
+  // 消息队列：思考中再发的消息入队，当前回复 done 后自动出队发送
+  const [queue, setQueue] = useState<string[]>([]);
+  const queueRef = useRef<string[]>([]);
   const inited = useRef(false);
 
   // 每个对话独立的 streaming 状态（切换不打断）
@@ -161,6 +164,16 @@ export function useClaude() {
         if (convId === activeIdRef.current) {
           setStatus(s === 'done' ? 'idle' : 'error');
         }
+        // 消息队列：当前回复结束后，自动出队发送下一条（仅成功时；error 不自动继续）
+        if (s === 'done' && queueRef.current.length > 0 && convId === activeIdRef.current) {
+          const next = queueRef.current[0];
+          queueRef.current = queueRef.current.slice(1);
+          setQueue(queueRef.current);
+          // 短延迟，让 UI 先渲染完成态再发起下一轮
+          setTimeout(() => {
+            if (next) doSend(next, convId, confirmEnabledRef.current);
+          }, 80);
+        }
       } else if (s === 'awaiting-confirm') {
         // 第一轮结束、等待用户确认：不解除 thinking 状态（仍在等待），保留 streaming 消息可继续接收
         // flush 残留 buffer，但不删 streamingIds（确认后第二轮会复用或新建）
@@ -283,11 +296,32 @@ export function useClaude() {
   // 内部占位（保留接口稳定性）
   const fireAsk = useCallback(async () => { await window.claude.ask(''); }, []);
 
+  // confirmEnabled 的 ref：onStatus 回调里出队时读最新值（避免闭包过期）
+  const confirmEnabledRef = useRef(confirmEnabled);
+  useEffect(() => { confirmEnabledRef.current = confirmEnabled; }, [confirmEnabled]);
+
+  // 核心发送（队列出队时复用）：已确认有 curId，不走入队分支
+  const doSend = useCallback(async (text: string, curId: string, useConfirm: boolean) => {
+    // 立即显示用户消息
+    setConvs((prev) => {
+      const c = prev[curId];
+      if (!c) return prev;
+      return { ...prev, [curId]: { messages: [...(c?.messages ?? []), { id: `u-${Date.now()}`, role: 'user', content: text }] } };
+    });
+    await window.claude.ask(text, useConfirm);
+  }, []);
+
   const send = useCallback(
     async (text: string) => {
       const trimmed = text.trim();
-      if (!trimmed || status === 'thinking') return;
+      if (!trimmed) return;
       setError('');
+      // 思考中（含等待确认）：入队，当前回复 done 后自动发送
+      if (status === 'thinking') {
+        queueRef.current = [...queueRef.current, trimmed];
+        setQueue(queueRef.current);
+        return;
+      }
       // 若没有激活对话，先创建（首条消息作为标题）
       let curId = activeId;
       if (!curId) {
@@ -297,14 +331,9 @@ export function useClaude() {
         setActiveId(curId);
         setConvs((prev) => ({ ...prev, [curId!]: { messages: [] } }));
       }
-      // 立即显示用户消息
-      setConvs((prev) => {
-        const c = prev[curId!];
-        return { ...prev, [curId!]: { messages: [...(c?.messages ?? []), { id: `u-${Date.now()}`, role: 'user', content: trimmed }] } };
-      });
-      await window.claude.ask(trimmed, confirmEnabled);
+      await doSend(trimmed, curId!, confirmEnabled);
     },
-    [status, activeId, confirmEnabled],
+    [status, activeId, confirmEnabled, doSend],
   );
 
   /**
@@ -369,7 +398,18 @@ export function useClaude() {
     [activeId, status, convs, confirmEnabled],
   );
 
-  const stop = useCallback(() => window.claude.stop(), []);
+  const stop = useCallback(() => {
+    window.claude.stop();
+    // 清空队列（用户主动中断，不再发送后续排队消息）
+    queueRef.current = [];
+    setQueue([]);
+  }, []);
+
+  // 清空消息队列（清空待发）
+  const clearQueue = useCallback(() => {
+    queueRef.current = [];
+    setQueue([]);
+  }, []);
 
   // 变更确认：用户点「执行」→ 第二轮 acceptEdits 重跑；点「拒绝」→ 清掉确认卡片
   const confirmApprove = useCallback(async () => {
@@ -444,5 +484,7 @@ export function useClaude() {
     // 变更前确认
     confirmEnabled, setConfirmEnabled,
     confirmApprove, confirmReject,
+    // 消息队列
+    queue, clearQueue,
   };
 }

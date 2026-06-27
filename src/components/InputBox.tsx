@@ -15,6 +15,8 @@ export function InputBox({
   onLoadCommands,
   confirmEnabled,
   onToggleConfirm,
+  queueCount,
+  onClearQueue,
 }: {
   onSend: (text: string) => void;
   onStop: () => void;
@@ -25,6 +27,8 @@ export function InputBox({
   onLoadCommands: () => void;
   confirmEnabled?: boolean;
   onToggleConfirm?: () => void;
+  queueCount?: number;
+  onClearQueue?: () => void;
 }) {
   const [text, setText] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -376,6 +380,24 @@ export function InputBox({
                 >
                   <Icon name="edit" size={13} color={confirmEnabled ? 'var(--accent)' : 'var(--text-muted)'} />
                   <span>确认</span>
+                </button>
+              )}
+              {/* 消息队列计数：思考中再发的消息排队，点 × 清空 */}
+              {queueCount != null && queueCount > 0 && onClearQueue && (
+                <button
+                  onClick={onClearQueue}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 4,
+                    padding: '3px 9px', borderRadius: 6, cursor: 'pointer',
+                    fontFamily: 'inherit', fontSize: 11.5, fontWeight: 500,
+                    border: '1px solid var(--accent)', background: 'rgba(88,166,255,.15)',
+                    color: 'var(--accent)', transition: 'all .15s',
+                  }}
+                  title={`${queueCount} 条排队中，点击清空`}
+                >
+                  <Icon name="command" size={13} color="var(--accent)" />
+                  <span>队列 {queueCount}</span>
+                  <span style={{ fontSize: 13, lineHeight: 1, opacity: 0.7 }}>×</span>
                 </button>
               )}
               {text && (
