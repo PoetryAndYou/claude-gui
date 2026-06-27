@@ -106,15 +106,11 @@ export function InputBox({
     const trimmed = text.trim();
     // 文字、图片、提及 至少有一个才能发
     if (!trimmed && images.length === 0 && mentions.length === 0) return;
-    if (isThinking) {
-      // 思考中：不立即发送（会与当前回复冲突），但保留输入内容作草稿
-      return;
-    }
     // 附件路径追加到消息文本：claude 读 @路径 指向的文件/图片
     const attachParts = [...mentions.map((m) => '@' + m.path), ...images.map((im) => '@' + im.path)];
     const attach = attachParts.join(' ');
     const payload = attach ? (trimmed ? trimmed + '\n' + attach : attach) : trimmed;
-    onSend(payload);
+    onSend(payload);   // 思考中也调用：send 内部会入队，回复完自动发送
     setText('');
     setSlashOpen(false);
     setAtOpen(false);

@@ -171,7 +171,7 @@ export function useClaude() {
           setQueue(queueRef.current);
           // 短延迟，让 UI 先渲染完成态再发起下一轮
           setTimeout(() => {
-            if (next) doSend(next, convId, confirmEnabledRef.current);
+            if (next) doSend(next, convId, confirmEnabledRef.current, true);  // skipDisplay: 入队时已显示
           }, 80);
         }
       } else if (s === 'awaiting-confirm') {
@@ -301,13 +301,15 @@ export function useClaude() {
   useEffect(() => { confirmEnabledRef.current = confirmEnabled; }, [confirmEnabled]);
 
   // 核心发送（队列出队时复用）：已确认有 curId，不走入队分支
-  const doSend = useCallback(async (text: string, curId: string, useConfirm: boolean) => {
-    // 立即显示用户消息
-    setConvs((prev) => {
-      const c = prev[curId];
-      if (!c) return prev;
-      return { ...prev, [curId]: { messages: [...(c?.messages ?? []), { id: `u-${Date.now()}`, role: 'user', content: text }] } };
-    });
+  // skipDisplay: 出队时消息已在入队时显示了，这里只发 ask 不再重复加消息
+  const doSend = useCallback(async (text: string, curId: string, useConfirm: boolean, skipDisplay = false) => {
+    if (!skipDisplay) {
+      setConvs((prev) => {
+        const c = prev[curId];
+        if (!c) return prev;
+        return { ...prev, [curId]: { messages: [...(c?.messages ?? []), { id: `u-${Date.now()}`, role: 'user', content: text }] } };
+      });
+    }
     await window.claude.ask(text, useConfirm);
   }, []);
 
@@ -316,10 +318,18 @@ export function useClaude() {
       const trimmed = text.trim();
       if (!trimmed) return;
       setError('');
-      // 思考中（含等待确认）：入队，当前回复 done 后自动发送
+          // 思考中（含等待确认）：立即显示用户消息 + 入队，当前回复 done 后自动发送
       if (status === 'thinking') {
         queueRef.current = [...queueRef.current, trimmed];
         setQueue(queueRef.current);
+        // 立即显示这条排队消息（让用户看到自己排了什么），出队时只发 ask 不再重复显示
+        if (activeId) {
+          setConvs((prev) => {
+            const c = prev[activeId];
+            if (!c) return prev;
+            return { ...prev, [activeId]: { messages: [...c.messages, { id: `u-${Date.now()}`, role: 'user', content: trimmed }] } };
+          });
+        }
         return;
       }
       // 若没有激活对话，先创建（首条消息作为标题），并把首条用户消息一起写入
