@@ -46,15 +46,34 @@ export function Sidebar({
     if (dir) setWorkspace(dir);
   };
 
+  // force=false: 切换展开/收起（未见数据则加载，已展开则收起）
+  // force=true: 强制刷新（重新从 claude 拉取）
   const load = async (force = false) => {
-    // 已加载且非强制刷新：直接显示（不跑 claude，避免覆盖对话）
-    if (loaded && !force) return;
-    setLoading(true);
-    setLoaded(true);
-    const list = await window.claude.getCommands();
-    setItems(list);
-    setLoading(false);
+    if (force) {
+      // 刷新：重新拉取并确保展开
+      setLoading(true);
+      setLoaded(true);
+      setCollapsedVisible(true);
+      const list = await window.claude.getCommands();
+      setItems(list);
+      setLoading(false);
+      return;
+    }
+    // 切换：没数据→加载并展开；有数据→收起/展开
+    if (!loaded) {
+      setLoading(true);
+      setLoaded(true);
+      setCollapsedVisible(true);
+      const list = await window.claude.getCommands();
+      setItems(list);
+      setLoading(false);
+    } else {
+      // 有数据，切换显示
+      setCollapsedVisible((v) => !v);
+    }
   };
+  // 列表是否可见（用于收起/展开）
+  const [collapsedVisible, setCollapsedVisible] = useState(true);
 
   const shortPath = workspace.replace(/^\/Users\/[^/]+/, '~');
 
@@ -97,7 +116,7 @@ export function Sidebar({
         <div style={{ display: 'flex', gap: 6, alignItems: 'stretch' }}>
           <button onClick={() => load(false)} style={{ ...footerBtnStyle, flex: 1, color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 7 }}>
             <Icon name="zap" size={14} color="var(--accent)" />
-            {loaded ? '收起/展开命令技能' : '查看命令/技能'}
+            {!loaded ? '查看命令/技能' : collapsedVisible ? '收起命令技能' : '展开命令技能'}
           </button>
           <button
             onClick={() => load(true)}
@@ -115,8 +134,8 @@ export function Sidebar({
           </button>
         </div>
 
-        {/* 三组列表：独立滚动区，命令多时不挤压上方对话区 */}
-        {loaded && !loading && (
+        {/* 三组列表：独立滚动区，命令多时不挤压上方对话区。collapsedVisible 控制收起/展开 */}
+        {loaded && !loading && collapsedVisible && (
           <div style={{ maxHeight: 220, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4, paddingRight: 2 }}>
             <CommandGroup
               title="命令" icon={<Icon name="command" size={12} color="var(--accent)" />} count={items.commands.length}
