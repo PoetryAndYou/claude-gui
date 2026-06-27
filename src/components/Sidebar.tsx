@@ -68,7 +68,8 @@ export function Sidebar({
       // mac：透明透毛玻璃；Windows/Linux：实色跟随主题（无毛玻璃可透，否则黑底深字看不见）
       background: isMac ? 'transparent' : (isLight ? '#ffffff' : '#0d1117'),
       padding: '12px 10px 10px',
-      overflowY: 'auto',
+      // 根不滚动：对话列表区自己 flex:1 滚动，底部命令区独立滚动，互不挤压重叠
+      overflow: 'hidden',
       display: 'flex', flexDirection: 'column', gap: 0,
       color: isLight ? '#1f2328' : '#e6e9ef',   /* 浅主题深字 / 深主题浅字 */
     } as React.CSSProperties}>
@@ -84,8 +85,9 @@ export function Sidebar({
         />
       </div>
 
-      {/* 次要工具：工作空间 + 命令/技能/代理。沉到底部，用细分隔线与对话区隔开 */}
-      <div style={{ marginTop: 8, paddingTop: 10, borderTop: '1px solid rgba(128,128,128,.18)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {/* 次要工具：工作空间 + 命令/技能/代理。沉到底部，用细分隔线与对话区隔开。
+          flex:0 0 auto 保证不被压缩；命令列表内部 maxHeight+滚动，多命令不挤压上方对话区 */}
+      <div style={{ marginTop: 8, paddingTop: 10, borderTop: '1px solid rgba(128,128,128,.18)', display: 'flex', flexDirection: 'column', gap: 8, flex: '0 0 auto' }}>
         <button onClick={pickDir} title={workspace} style={{ ...footerBtnStyle, display: 'flex', alignItems: 'center', gap: 7 }}>
           <Icon name="folder" size={14} color="var(--text-muted)" />
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{shortPath.length > 22 ? '…' + shortPath.slice(-21) : shortPath || '选择工作空间'}</span>
@@ -113,9 +115,9 @@ export function Sidebar({
           </button>
         </div>
 
-        {/* 三组列表 */}
+        {/* 三组列表：独立滚动区，命令多时不挤压上方对话区 */}
         {loaded && !loading && (
-          <>
+          <div style={{ maxHeight: 220, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4, paddingRight: 2 }}>
             <CommandGroup
               title="命令" icon={<Icon name="command" size={12} color="var(--accent)" />} count={items.commands.length}
               collapsed={collapsed.commands}
@@ -161,7 +163,7 @@ export function Sidebar({
             {items.commands.length === 0 && items.skills.length === 0 && items.agents.length === 0 && (
               <div style={{ fontSize: 12, color: 'var(--text-faint)', padding: '4px 8px' }}>未获取到（请确认 claude 已登录）</div>
             )}
-          </>
+          </div>
         )}
       </div>
     </div>
