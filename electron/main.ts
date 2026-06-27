@@ -23,7 +23,7 @@ function createWindow() {
     transparent: isMac,
     vibrancy: isMac ? 'under-window' : undefined,
     visualEffectState: 'active',
-    backgroundColor: isMac ? '#00000000' : '#0d1117',
+    backgroundColor: isMac ? '#00000000' : '#1a1d23',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

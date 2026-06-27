@@ -85,7 +85,7 @@ export function Sidebar({
       width: 232, flex: '0 0 auto',
       borderRight: '1px solid rgba(128,128,128,.2)',
       // mac：透明透毛玻璃；Windows/Linux：实色跟随主题（无毛玻璃可透，否则黑底深字看不见）
-      background: isMac ? 'transparent' : (isLight ? '#ffffff' : '#0d1117'),
+      background: isMac ? 'transparent' : (isLight ? '#ffffff' : 'var(--bg-app)'),
       padding: '12px 10px 10px',
       // 根不滚动：对话列表区自己 flex:1 滚动，底部命令区独立滚动，互不挤压重叠
       overflow: 'hidden',

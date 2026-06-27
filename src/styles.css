@@ -2,17 +2,18 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 :root, html.dark {
-  --bg-app: #0d1117;
-  --bg-elev: #161b22;
-  --bg-elev-2: #010409;
-  --bg-input: #161b22;
-  --border: #30363d;
-  --border-soft: #21262d;
+  /* 深色主题：柔和深灰（偏暖），不像 #0d1117 那样死黑，长时间看眼睛不累 */
+  --bg-app: #1a1d23;        /* 主背景：深炭灰（比纯黑亮一档） */
+  --bg-elev: #232830;       /* 卡片/气泡：再亮一档 */
+  --bg-elev-2: #2d333b;     /* 次级表面（之前 #010409 太黑，修正为亮灰） */
+  --bg-input: #232830;      /* 输入框背景 */
+  --border: #3a4049;
+  --border-soft: #30363d;
   --text: #e6edf3;
   --text-soft: #c9d1d9;
   --text-muted: #8b949e;
   --text-faint: #6e7681;
-  --text-fainter: #484f58;
+  --text-fainter: #565f6a;
   /* 月光白主题：暖白月光作 accent，与深炭背景形成最纯粹高对比，不刺眼 */
   --accent: #f0ede5;
   --accent-2: #c9c9c9;
@@ -26,7 +27,7 @@
   --code-bg: rgba(110,118,129,.25);
   --code-inline-bg: rgba(110,118,129,.25);
   --hover-overlay: rgba(240,237,229,.08);
-  --shadow: rgba(0,0,0,.4);
+  --shadow: rgba(0,0,0,.35);
 }
 
 html.light {

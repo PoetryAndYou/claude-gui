@@ -172,7 +172,7 @@ const CodeBlock = memo(function CodeBlock({ language, children, theme, streaming
       </button>
       {streaming ? (
         // 流式中：纯 pre 显示代码（不跑语法高亮，避免每个 delta 重算高亮卡顿），完成后才高亮
-        <pre style={{ margin: 0, borderRadius: 8, fontSize: 13, padding: '30px 12px 12px', background: theme === 'light' ? '#f6f8fa' : '#161b22', color: theme === 'light' ? '#1f2328' : '#e6edf3', overflow: 'auto', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+        <pre style={{ margin: 0, borderRadius: 8, fontSize: 13, padding: '30px 12px 12px', background: theme === 'light' ? '#f6f8fa' : 'var(--bg-elev-2)', color: theme === 'light' ? '#1f2328' : '#e6edf3', overflow: 'auto', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
           <code>{children}</code>
         </pre>
       ) : (
