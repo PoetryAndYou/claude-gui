@@ -3,6 +3,7 @@ import type { ClaudeItems, Conversation } from '../../electron/preload';
 import type { Theme } from '../hooks/useClaude';
 import { ConversationList } from './ConversationList';
 import { Icon } from './Icon';
+import { SkillDetailModal } from './SkillDetailModal';
 
 export function Sidebar({
   theme,
@@ -33,6 +34,8 @@ export function Sidebar({
   const [collapsed, setCollapsed] = useState<{ commands: boolean; skills: boolean; agents: boolean }>({
     commands: false, skills: false, agents: false,
   });
+  // 技能二级弹窗
+  const [skillModal, setSkillModal] = useState<ClaudeItems['skills'][number] | null>(null);
 
   // 工作空间随对话切换变化（每个对话绑定自己的工作目录）
   useEffect(() => {
@@ -109,9 +112,21 @@ export function Sidebar({
               collapsed={collapsed.skills}
               onToggle={() => toggle('skills')}
               renderItem={(s) => (
-                <button key={s.name} onClick={() => onPickCommand('/' + s.name)} style={itemStyle} title={s.description}>
-                  <div style={{ fontWeight: 500 }}>{s.name}</div>
-                  {s.description && <div style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 1 }}>{s.description}</div>}
+                <button
+                  key={s.name}
+                  onClick={() => setSkillModal(s)}
+                  style={itemStyle}
+                  title={s.description}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ fontWeight: 500 }}>{s.name}</span>
+                    <svg width="8" height="8" viewBox="0 0 8 8" style={{ opacity: 0.5 }}><path d="M2 3 L4 5 L6 3" fill="none" stroke="var(--text-faint)" strokeWidth="1.2"/></svg>
+                  </div>
+                  {s.description && (
+                    <div style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {s.description}
+                    </div>
+                  )}
                 </button>
               )}
               items={items.skills}
@@ -131,6 +146,16 @@ export function Sidebar({
           </>
         )}
       </div>
+
+      {/* 技能二级弹窗 */}
+      <SkillDetailModal
+        skill={skillModal}
+        onClose={() => setSkillModal(null)}
+        onTrigger={(name) => {
+          setSkillModal(null);
+          onPickCommand('/' + name);
+        }}
+      />
     </div>
   );
 }

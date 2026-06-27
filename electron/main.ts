@@ -850,6 +850,7 @@ ipcMain.handle('claude:new-chat', () => {
 export interface CmdItem {
   name: string;
   description?: string;
+  path?: string;   // SKILL.md 绝对路径（二级弹窗按需读完整内容用）
 }
 export interface ClaudeItems {
   commands: string[];
@@ -859,6 +860,18 @@ export interface ClaudeItems {
 
 // skill 列表：纯文件扫描，即时返回（不依赖 claude 进程）
 ipcMain.handle('claude:get-skills', () => { syncWorkspace(); return scanSkills(); });
+
+// skill 完整内容（二级弹窗用）：读 SKILL.md 原文（去掉 frontmatter 的 --- 包裹）
+ipcMain.handle('claude:skill-detail', (_e, skillPath: string) => {
+  try {
+    if (!skillPath || !fs.existsSync(skillPath)) return { content: '', error: '文件不存在' };
+    const content = fs.readFileSync(skillPath, 'utf8');
+    // 去掉 frontmatter ---  --- 包裹，保留内容（含 frontmatter 字段 + 正文）
+    return { content };
+  } catch (e) {
+    return { content: '', error: (e as Error).message };
+  }
+});
 
 // 文件列表：@ 提及用，列出指定子目录(默认顶层)的直接子项（可逐级进入，不递归）
 // query: 文件名筛选；subdir: 相对 workspace 的子目录路径（如 "TradingAgents/assets"），空=顶层
@@ -1054,8 +1067,9 @@ function scanSkills(): CmdItem[] {
         const name = nameM ? nameM[1].trim().replace(/^["']|["']$/g, '') : '';
         let desc = descM ? descM[1].trim().replace(/^["']|["']$/g, '') : '';
         if (!name) continue;
-        if (desc.length > 80) desc = desc.slice(0, 78) + '…';
-        out.push({ name, description: desc || undefined });
+        // 不截断 description（二级弹窗需要完整；列表侧栏自行 truncate）
+        // 去重：同名 skill 保留 path（用于按需读完整内容）
+        out.push({ name, description: desc || undefined, path: f });
       } catch (_) {}
     }
   }

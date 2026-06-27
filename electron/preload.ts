@@ -94,6 +94,8 @@ export interface ClaudeAPI {
   // 命令/技能/代理
   getCommands: () => Promise<ClaudeItems>;
   getSkills: () => Promise<{ name: string; description?: string }[]>;
+  // skill 完整内容（二级弹窗用）
+  getSkillDetail: (skillPath: string) => Promise<{ content: string; error?: string }>;
   // 文件列表（@ 提及用）：列出 subdir（相对 workspace，空=顶层）的直接子项
   listFiles: (query: string, subdir?: string) => Promise<{ name: string; path: string; isDir: boolean }[]>;
   // 保存粘贴的图片（base64）到工作区，返回相对路径；失败返回 { error }
@@ -146,6 +148,7 @@ contextBridge.exposeInMainWorld('claude', {
   setMode: (mode: string | null) => ipcRenderer.invoke('claude:set-mode', mode),
   getCommands: () => ipcRenderer.invoke('claude:get-commands'),
   getSkills: () => ipcRenderer.invoke('claude:get-skills'),
+  getSkillDetail: (skillPath: string) => ipcRenderer.invoke('claude:skill-detail', skillPath),
   listFiles: (query: string, subdir?: string) => ipcRenderer.invoke('claude:list-files', query, subdir),
   saveImage: (dataB64: string, ext: string) => ipcRenderer.invoke('claude:save-image', dataB64, ext),
   readImage: (relPath: string) => ipcRenderer.invoke('claude:read-image', relPath),
