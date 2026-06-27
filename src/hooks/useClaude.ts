@@ -173,7 +173,7 @@ export function useClaude() {
           // 目标对话 = 当前 done 的对话（保证队列在哪发的就在哪执行）
           const targetConvId = convId;
           if (next) {
-            doSend(next, targetConvId, confirmEnabledRef.current, true);
+            doSend(next, targetConvId, confirmEnabledRef.current, false);
           }
         }
       } else if (s === 'awaiting-confirm') {
@@ -322,20 +322,10 @@ export function useClaude() {
       const trimmed = text.trim();
       if (!trimmed) return;
       setError('');
-      // 思考中（含等待确认）：立即显示用户消息 + 入队，当前回复 done 后自动发送
+      // 思考中（含等待确认）：仅入队，不立即显示（保证消息和回答一一对应，顺序不打乱）
       if (status === 'thinking') {
         queueRef.current = [...queueRef.current, trimmed];
         setQueue(queueRef.current);
-        // 立即显示这条排队消息（用 ref 拿最新 activeId，避免闭包过期）
-        const cid = activeIdRef.current;
-        if (cid) {
-          setConvs((prev) => {
-            const c = prev[cid];
-            // 对话状态可能还没初始化，兜底用 []
-            const baseMsgs = c?.messages ?? [];
-            return { ...prev, [cid]: { messages: [...baseMsgs, { id: `u-${Date.now()}`, role: 'user', content: trimmed }] } };
-          });
-        }
         return;
       }
       // 若没有激活对话，先创建（首条消息作为标题），并把首条用户消息一起写入
