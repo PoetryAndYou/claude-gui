@@ -31,6 +31,9 @@ export function useClaude() {
   const [convList, setConvList] = useState<Conversation[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [status, setStatus] = useState<ChatStatus>('idle');
+  // status 的同步 ref：send 判断"是否思考中"用 ref（React state 异步更新，连发时第二条会读到旧值导致没入队）
+  const statusRef = useRef<ChatStatus>('idle');
+  const setStatusSynced = (s: ChatStatus) => { statusRef.current = s; setStatus(s); };
   const [error, setError] = useState<string>('');
   const [commands, setCommands] = useState<ClaudeItems>(EMPTY_ITEMS);
   // 变更前确认开关（用户在输入框旁勾选）；开启后每次 send 走两轮：先 default 预览再确认执行
@@ -128,7 +131,7 @@ export function useClaude() {
     });
     api.onStatus((convId, s) => {
       if (s === 'thinking') {
-        if (convId === activeIdRef.current) setStatus('thinking');
+        if (convId === activeIdRef.current) setStatusSynced('thinking');
         const id = `a-${Date.now()}`;
         streamingIds.current[convId] = id;
         setConvs((prev) => {
@@ -162,7 +165,7 @@ export function useClaude() {
           });
         }
         if (convId === activeIdRef.current) {
-          setStatus(s === 'done' ? 'idle' : 'error');
+          setStatusSynced(s === 'done' ? 'idle' : 'error');
         }
         // 消息队列：当前回复 done 后，立即出队下一条（仅成功时；error 不自动继续）
         // 不延迟：done 时 claude 已结束，立即发下一条；doSend 内部 setStatus('thinking') 保证串行
@@ -312,8 +315,8 @@ export function useClaude() {
         return { ...prev, [curId]: { messages: [...(c?.messages ?? []), { id: `u-${Date.now()}`, role: 'user', content: text }] } };
       });
     }
-    // 立即标记 thinking，保证串行（下一轮出队在此条 done 后才进行）
-    setStatus('thinking');
+    // 立即标记 thinking（同步 ref），保证串行（下一轮出队在此条 done 后才进行）
+    setStatusSynced('thinking');
     await window.claude.ask(text, useConfirm);
   }, []);
 
@@ -323,7 +326,8 @@ export function useClaude() {
       if (!trimmed) return;
       setError('');
       // 思考中（含等待确认）：仅入队，不立即显示（保证消息和回答一一对应，顺序不打乱）
-      if (status === 'thinking') {
+      // 用 statusRef 同步判断，避免连发时读到旧 state 没入队
+      if (statusRef.current === 'thinking') {
         queueRef.current = [...queueRef.current, trimmed];
         setQueue(queueRef.current);
         return;
@@ -343,8 +347,8 @@ export function useClaude() {
         const baseMsgs = isFirst ? [] : (c?.messages ?? []);
         return { ...prev, [curId!]: { messages: [...baseMsgs, { id: `u-${Date.now()}`, role: 'user', content: trimmed }] } };
       });
-      // 立即标记 thinking，防止后续快速连发同时进入 ask（应入队串行执行）
-      setStatus('thinking');
+      // 立即标记 thinking（同步 ref），防止后续快速连发同时进入 ask（应入队串行执行）
+      setStatusSynced('thinking');
       await window.claude.ask(trimmed, confirmEnabled);
     },
     [status, activeId, confirmEnabled],
@@ -476,7 +480,7 @@ export function useClaude() {
     if (ok) {
       setActiveId(id);
       // 状态跟随目标对话：若它正在生成则 thinking，否则 idle
-      setStatus(streamingIds.current[id] ? 'thinking' : 'idle');
+      setStatusSynced(streamingIds.current[id] ? 'thinking' : 'idle');
       setError('');
       // 从 claude session 恢复历史消息（仅在还没加载过时）
       if (!convs[id] || convs[id].messages.length === 0) {
