@@ -478,7 +478,9 @@ function executeAsk(prompt: string, confirmEnabled: boolean): Promise<void> {
       detectFlags();  // 探测 claude 支持的 flag
       // 参数：2.1.34 及以上都支持，探测到才加（探测不到则退化保证能跑）
       // --verbose 必填：2.1.193 起 -p --output-format stream-json 不配 --verbose 直接报错退出
-      const args = ['-p', prompt, '--output-format', 'stream-json', '--verbose'];
+      // 注意：prompt 含换行时，若走 shell(Windows .cmd)，换行会被 shell 截断导致只发第一行。
+      // 解决：prompt 通过 stdin 管道传（claude -p 从 stdin 读，支持多行），不走 args。
+      const args = ['-p', '', '--output-format', 'stream-json', '--verbose'];
       // 逐字流式（实测 2.1.34 支持）
       if (partialMsgSupport) {
         args.push('--include-partial-messages');
@@ -534,10 +536,16 @@ function executeAsk(prompt: string, confirmEnabled: boolean): Promise<void> {
           cwd: workspace,
           env: process.env,
           shell: process.platform === 'win32',
-          // stdin 用 ignore 关闭：否则 Windows 上 claude.cmd 会卡在等 stdin（一直 thinking 不退出）
-          stdio: ['ignore', 'pipe', 'pipe'],
+          // stdin 用 pipe：把多行 prompt 写入 stdin（避免 shell 模式截断换行）
+          stdio: ['pipe', 'pipe', 'pipe'],
           windowsHide: true,
         });
+        // 立即把完整 prompt 写入 stdin 并关闭（claude -p '' 会从 stdin 读完整多行内容）
+        // 写完 end() 关闭 stdin，避免 Windows claude.cmd 卡在等待输入
+        if (currentProc.stdin) {
+          currentProc.stdin.write(prompt);
+          currentProc.stdin.end();
+        }
       } catch (e) {
         send('claude:error', `无法启动 claude: ${(e as Error).message}`);
         send('claude:status', 'error');
