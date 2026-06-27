@@ -250,6 +250,7 @@ export default function App() {
             registerDraftSetter={(fn) => (draftRef.current = fn)}
             commands={commands}
             onLoadCommands={loadCommands}
+            historyMessages={messages.filter((m) => m.role === 'user').map((m) => m.content)}
             confirmEnabled={confirmEnabled}
             onToggleConfirm={() => setConfirmEnabled(!confirmEnabled)}
             queueCount={queue.length}

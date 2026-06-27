@@ -17,6 +17,7 @@ export function InputBox({
   onToggleConfirm,
   queueCount,
   onClearQueue,
+  historyMessages,
 }: {
   onSend: (text: string) => void;
   onStop: () => void;
@@ -29,11 +30,17 @@ export function InputBox({
   onToggleConfirm?: () => void;
   queueCount?: number;
   onClearQueue?: () => void;
+  historyMessages?: string[];  // 当前对话的历史用户消息，供上下键遍历
 }) {
   const [text, setText] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const isThinking = status === 'thinking';
+
+  // 上下键遍历历史消息：histIdx = 当前选中的历史索引（null = 未在历史里）
+  // historyMessages 反向遍历（最新在下方向键↑取最近一条）
+  const histIdxRef = useRef<number | null>(null);
+  const draftBackupRef = useRef<string>('');  // 进入历史前的草稿备份
 
   // / 补全
   const [slashOpen, setSlashOpen] = useState(false);
@@ -116,6 +123,8 @@ export function InputBox({
     setAtOpen(false);
     setImages([]);
     setMentions([]);
+    // 重置历史遍历索引
+    histIdxRef.current = null;
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
   };
 
@@ -220,6 +229,34 @@ export function InputBox({
       if (e.key === 'ArrowUp') { e.preventDefault(); setAtIdx((i) => (i - 1 + max) % max); return; }
       if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) { e.preventDefault(); acceptAt(atFiles[Math.min(atIdx, max - 1)]); return; }
       if (e.key === 'Escape') { e.preventDefault(); setAtOpen(false); return; }
+    }
+    // 上下键遍历历史消息（仅在未打开 / @ 补全菜单时；且光标在最顶/底才触发，避免误触多行编辑）
+    if (!slashOpen && !atOpen && historyMessages && historyMessages.length > 0) {
+      const ta = e.currentTarget;
+      if (e.key === 'ArrowUp' && ta.selectionStart === 0 && ta.selectionEnd === 0) {
+        e.preventDefault();
+        // 进入历史前备份当前草稿
+        if (histIdxRef.current === null) {
+          draftBackupRef.current = text;
+          histIdxRef.current = historyMessages.length - 1;  // 最新一条
+        } else if (histIdxRef.current > 0) {
+          histIdxRef.current -= 1;  // 往更早
+        }
+        setText(historyMessages[histIdxRef.current] || '');
+        return;
+      }
+      if (e.key === 'ArrowDown' && histIdxRef.current !== null) {
+        e.preventDefault();
+        if (histIdxRef.current < historyMessages.length - 1) {
+          histIdxRef.current += 1;  // 往更新
+          setText(historyMessages[histIdxRef.current] || '');
+        } else {
+          // 已到最新，退出历史模式恢复草稿
+          histIdxRef.current = null;
+          setText(draftBackupRef.current);
+        }
+        return;
+      }
     }
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
