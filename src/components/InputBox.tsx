@@ -18,6 +18,7 @@ export function InputBox({
   queueCount,
   onClearQueue,
   historyMessages,
+  centered,
 }: {
   onSend: (text: string) => void;
   onStop: () => void;
@@ -31,6 +32,7 @@ export function InputBox({
   queueCount?: number;
   onClearQueue?: () => void;
   historyMessages?: string[];  // 当前对话的历史用户消息，供上下键遍历
+  centered?: boolean;          // 空态居中模式：去 borderTop，用于首屏/新对话居中布局
 }) {
   const [text, setText] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -329,7 +331,7 @@ export function InputBox({
   };
 
   return (
-    <div style={{ position: 'relative', padding: '16px 20px 20px', borderTop: '1px solid var(--border-soft)', background: 'var(--bg-app)' }}>
+    <div style={centered ? { position: 'relative', padding: '0 20px', background: 'transparent' } : { position: 'relative', padding: '16px 20px 20px', borderTop: '1px solid var(--border-soft)', background: 'var(--bg-app)' }}>
       {/* / 补全菜单：限宽跟随输入框，不盖全行 */}
       {showSlash && <SlashMenu items={filtered} idx={slashIdx} onPick={acceptSlash} onHover={setSlashIdx} />}
 
@@ -347,9 +349,9 @@ export function InputBox({
         />
       )}
 
-      <div style={{ maxWidth: 880, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 0 }}>
+      <div style={centered ? { width: '100%', display: 'flex', flexDirection: 'column', gap: 0 } : { maxWidth: 880, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 0 }}>
         {/* 输入框容器：内部含 textarea + 底部操作栏 */}
-        <div style={inputContainerStyle} ref={containerRef}>
+        <div style={centered ? { ...inputContainerStyle, borderRadius: 20, boxShadow: '0 8px 32px var(--shadow), 0 2px 8px var(--shadow)' } : inputContainerStyle} ref={containerRef}>
           {/* 附件区：@提及的文件/文件夹 chip + 粘贴的图片缩略图 */}
           {(mentions.length > 0 || images.length > 0) && (
             <div style={{ display: 'flex', gap: 8, padding: '10px 12px 0', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -382,9 +384,9 @@ export function InputBox({
             onChange={onChange}
             onKeyDown={onKeyDown}
             onPaste={onPaste}
-            rows={2}
-            placeholder="发消息给 Claude…"
-            style={{ flex: 1, resize: 'none', border: 'none', background: 'transparent', color: 'var(--text)', padding: '12px 14px 4px', fontSize: 15, lineHeight: 1.6, fontFamily: 'inherit', outline: 'none', maxHeight: 200 }}
+            rows={centered ? 4 : 2}
+            placeholder={centered ? '想做什么？选好工作空间后开始对话…' : '发消息给 Claude…'}
+            style={{ flex: 1, resize: 'none', border: 'none', background: 'transparent', color: 'var(--text)', padding: centered ? '16px 16px 6px' : '12px 14px 4px', fontSize: centered ? 16 : 15, lineHeight: 1.6, fontFamily: 'inherit', outline: 'none', maxHeight: 200 }}
             onFocus={() => { if (containerRef.current) containerRef.current.style.borderColor = 'var(--accent)'; }}
             onBlur={() => { if (containerRef.current) containerRef.current.style.borderColor = 'var(--border)'; }}
           />

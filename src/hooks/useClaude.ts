@@ -173,7 +173,6 @@ export function useClaude() {
           const next = queueRef.current[0];
           queueRef.current = queueRef.current.slice(1);
           setQueue(queueRef.current);
-          console.log(`[Q] 出队发送: "${next.slice(0,20)}" (剩${queueRef.current.length}条)`);
           // 目标对话 = 当前 done 的对话（保证队列在哪发的就在哪执行）
           const targetConvId = convId;
           if (next) {
@@ -501,6 +500,20 @@ export function useClaude() {
     setActiveId(newActive);
   }, []);
 
+  // 导入 session 文件：弹文件选择器→主进程解析成对话→刷新列表并激活第一条导入项。
+  // 返回 skipped（去重跳过的数量）给 UI 提示；返回 -1 表示用户取消。
+  const importConvs = useCallback(async (): Promise<number> => {
+    const r = await window.claude.conv.import();
+    setConvList(r.conversations);
+    if (r.activeId && r.activeId !== activeId) {
+      setActiveId(r.activeId);
+      // 初始化导入项的消息为空（点开后再 loadHistory 拉取）
+      setConvs((prev) => (prev[r.activeId!] ? prev : { ...prev, [r.activeId!]: { messages: [] } }));
+      setStatus('idle');
+    }
+    return r.skipped ?? 0;
+  }, [activeId]);
+
   const renameConv = useCallback(async (id: string, title: string) => {
     await window.claude.conv.rename(id, title);
     setConvList((prev) => prev.map((c) => (c.id === id ? { ...c, title } : c)));
@@ -516,6 +529,7 @@ export function useClaude() {
     convList, activeId,
     send, stop, newChat, switchConv, deleteConv, renameConv, loadCommands,
     regenerate, editAndResend,
+    importConvs,
     fireAsk,
     // 变更前确认
     confirmEnabled, setConfirmEnabled,

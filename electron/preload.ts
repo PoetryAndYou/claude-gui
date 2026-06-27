@@ -43,6 +43,7 @@ export interface Conversation {
   title: string;
   sessionId: string | null;
   workspace: string;
+  workspacePicked: boolean;
   model: string | null;
   mode: string | null;
   createdAt: number;
@@ -61,6 +62,8 @@ export interface ConvAPI {
   switch: (id: string) => Promise<boolean>;
   delete: (id: string) => Promise<{ conversations: Conversation[]; activeId: string | null }>;
   rename: (id: string, title: string) => Promise<boolean>;
+  // 导入 session 文件（.jsonl）：返回新列表、激活 id、跳过数（去重）
+  import: () => Promise<{ conversations: Conversation[]; activeId: string | null; skipped: number }>;
 }
 
 export interface ClaudeAPI {
@@ -81,6 +84,7 @@ export interface ClaudeAPI {
   onConfirmRequest: (cb: (convId: string, changes: PendingChange[]) => void) => void;
   // 工作空间
   getWorkspace: () => Promise<string>;
+  getWorkspaceInfo: () => Promise<{ workspace: string; picked: boolean }>;
   setWorkspace: (dir: string) => Promise<string>;
   pickDirectory: () => Promise<string | null>;
   // 模型
@@ -138,6 +142,7 @@ contextBridge.exposeInMainWorld('claude', {
   onConfirmRequest: (cb: (convId: string, changes: PendingChange[]) => void) =>
     ipcRenderer.on('claude:confirm-request', (_e, convId, changes) => cb(convId, changes)),
   getWorkspace: () => ipcRenderer.invoke('claude:get-workspace'),
+  getWorkspaceInfo: () => ipcRenderer.invoke('claude:workspace-info'),
   setWorkspace: (dir: string) => ipcRenderer.invoke('claude:set-workspace', dir),
   pickDirectory: () => ipcRenderer.invoke('claude:pick-directory'),
   getModels: () => ipcRenderer.invoke('claude:get-models'),
@@ -161,6 +166,7 @@ contextBridge.exposeInMainWorld('claude', {
     switch: (id: string) => ipcRenderer.invoke('conv:switch', id),
     delete: (id: string) => ipcRenderer.invoke('conv:delete', id),
     rename: (id: string, title: string) => ipcRenderer.invoke('conv:rename', id, title),
+    import: () => ipcRenderer.invoke('conv:import'),
   },
   win: {
     minimize: () => ipcRenderer.send('win:minimize'),

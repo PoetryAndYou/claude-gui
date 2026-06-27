@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useClaude, type Theme } from './hooks/useClaude';
 import { MessageList } from './components/MessageList';
 import { InputBox } from './components/InputBox';
@@ -26,6 +26,7 @@ export default function App() {
     convList, activeId,
     send, stop, newChat, switchConv, deleteConv, renameConv, loadCommands,
     regenerate, editAndResend,
+    importConvs,
     confirmEnabled, setConfirmEnabled,
     confirmApprove, confirmReject,
     queue, clearQueue, removeQueueItem, runQueueItemNow,
@@ -73,6 +74,13 @@ export default function App() {
   // 模式列表（命令面板用），对话切换时刷新当前模式由 ModeSwitcher 自管
   const [modes, setModes] = useState<ModelItem[]>([]);
   const [currentMode, setCurrentMode] = useState<string>('acceptEdits');
+  // 当前对话是否已显式选过工作空间（决定首屏/空态输入框居中布局）
+  const [workspacePicked, setWorkspacePicked] = useState(false);
+  const refreshWorkspacePicked = useCallback(() => {
+    window.claude.getWorkspaceInfo().then((info) => setWorkspacePicked(info.picked)).catch(() => {});
+  }, []);
+  // 对话切换 / pick 目录后刷新 picked 状态
+  useEffect(() => { refreshWorkspacePicked(); }, [activeId]);
   useEffect(() => {
     window.claude.getModes().then(setModes).catch(() => {});
   }, []);
@@ -91,7 +99,18 @@ export default function App() {
 
   const pickDirectory = useCallback(async () => {
     await window.claude.pickDirectory();
-  }, []);
+    // 选完目录后刷新 picked 状态（首屏选空间 → 触发从居中切到常规布局）
+    refreshWorkspacePicked();
+  }, [refreshWorkspacePicked]);
+
+  // 空态（无消息且未选工作空间）→ 输入框居中布局；否则常规底部布局
+  const isEmpty = messages.length === 0 && !workspacePicked;
+  // 历史用户消息（供输入框上下键遍历）。useMemo：messages 每 chunk 都换引用，
+  // 若不记忆会每个 chunk 都重算并驱动 InputBox 全量重渲染
+  const historyMessages = useMemo(
+    () => messages.filter((m) => m.role === 'user').map((m) => m.content),
+    [messages],
+  );
 
   // 全局快捷键
   useEffect(() => {
@@ -211,10 +230,12 @@ export default function App() {
             onNewConv={newChat}
             onDeleteConv={deleteConv}
             onRenameConv={renameConv}
+            onImportConv={importConvs}
+            onWorkspaceChange={refreshWorkspacePicked}
           />
         )}
 
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg-app)' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg-app)', justifyContent: isEmpty ? 'center' : 'flex-start' }}>
           {error && (
             <div style={{
               padding: '8px 16px', background: 'var(--red-soft)', color: 'var(--red)',
@@ -224,38 +245,67 @@ export default function App() {
             </div>
           )}
 
-          <MessageList
-            messages={messages}
-            status={status}
-            theme={theme}
-            onRegenerate={regenerate}
-            onEdit={editAndResend}
-            onConfirmApprove={confirmApprove}
-            onConfirmReject={confirmReject}
-          />
+          {isEmpty ? (
+            /* 空态居中：引导 + 居中放大输入框（用户选空间后切回常规布局） */
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 24, padding: '0 16px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, color: 'var(--text-fainter)' }}>
+                <div style={{ color: 'var(--accent)' }}><Icon name="bolt" size={40} color="var(--accent)" /></div>
+                <div style={{ fontSize: 20, color: 'var(--text-faint)', fontWeight: 500 }}>Claude GUI</div>
+              </div>
+              <div style={{ width: '100%', maxWidth: 920 }}>
+              <InputBox
+                onSend={send}
+                onStop={stop}
+                status={status}
+                draft={draft}
+                registerDraftSetter={(fn) => (draftRef.current = fn)}
+                commands={commands}
+                onLoadCommands={loadCommands}
+                historyMessages={historyMessages}
+                confirmEnabled={confirmEnabled}
+                onToggleConfirm={() => setConfirmEnabled(!confirmEnabled)}
+                queueCount={queue.length}
+                onClearQueue={clearQueue}
+                centered
+              />
+              </div>
+            </div>
+          ) : (
+            <>
+              <MessageList
+                messages={messages}
+                status={status}
+                theme={theme}
+                onRegenerate={regenerate}
+                onEdit={editAndResend}
+                onConfirmApprove={confirmApprove}
+                onConfirmReject={confirmReject}
+              />
 
-          {/* 消息队列列表：输入框上方，显示排队消息（删除/立即执行） */}
-          <QueueList
-            queue={queue}
-            onRemove={removeQueueItem}
-            onRunNow={runQueueItemNow}
-            onClear={clearQueue}
-          />
+              {/* 消息队列列表：输入框上方，显示排队消息（删除/立即执行） */}
+              <QueueList
+                queue={queue}
+                onRemove={removeQueueItem}
+                onRunNow={runQueueItemNow}
+                onClear={clearQueue}
+              />
 
-          <InputBox
-            onSend={send}
-            onStop={stop}
-            status={status}
-            draft={draft}
-            registerDraftSetter={(fn) => (draftRef.current = fn)}
-            commands={commands}
-            onLoadCommands={loadCommands}
-            historyMessages={messages.filter((m) => m.role === 'user').map((m) => m.content)}
-            confirmEnabled={confirmEnabled}
-            onToggleConfirm={() => setConfirmEnabled(!confirmEnabled)}
-            queueCount={queue.length}
-            onClearQueue={clearQueue}
-          />
+              <InputBox
+                onSend={send}
+                onStop={stop}
+                status={status}
+                draft={draft}
+                registerDraftSetter={(fn) => (draftRef.current = fn)}
+                commands={commands}
+                onLoadCommands={loadCommands}
+                historyMessages={historyMessages}
+                confirmEnabled={confirmEnabled}
+                onToggleConfirm={() => setConfirmEnabled(!confirmEnabled)}
+                queueCount={queue.length}
+                onClearQueue={clearQueue}
+              />
+            </>
+          )}
         </div>
       </div>
 

@@ -14,6 +14,8 @@ export function Sidebar({
   onNewConv,
   onDeleteConv,
   onRenameConv,
+  onImportConv,
+  onWorkspaceChange,
 }: {
   theme: Theme;
   onPickCommand: (cmd: string) => void;
@@ -24,6 +26,8 @@ export function Sidebar({
   onNewConv: () => void;
   onDeleteConv: (id: string) => void;
   onRenameConv: (id: string, title: string) => void;
+  onImportConv?: () => Promise<number>;
+  onWorkspaceChange?: () => void;   // 选/改工作空间后通知 App 刷新 picked 状态
 }) {
   const isLight = theme === 'light';
   // mac 透毛玻璃；Windows/Linux 无毛玻璃，侧栏用实色（跟主题），否则会透出窗口黑底变深字看不见
@@ -44,6 +48,7 @@ export function Sidebar({
   const pickDir = async () => {
     const dir = await window.claude.pickDirectory();
     if (dir) setWorkspace(dir);
+    onWorkspaceChange?.();
   };
 
   // force=false: 切换展开/收起（未见数据则加载，已展开则收起）
@@ -101,6 +106,7 @@ export function Sidebar({
           onNew={onNewConv}
           onDelete={onDeleteConv}
           onRename={onRenameConv}
+          onImport={onImportConv}
         />
       </div>
 

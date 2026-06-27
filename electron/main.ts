@@ -250,6 +250,7 @@ interface Conversation {
   title: string;         // 显示名（取首条消息）
   sessionId: string | null;  // claude 的 session_id（用于 --resume）
   workspace: string;     // 该对话的工作目录
+  workspacePicked: boolean;  // 用户是否显式选过工作空间（决定首屏/空态输入框居中布局）
   model: string | null;  // 该对话用的模型别名（sonnet/opus/haiku），null = claude 默认
   mode: string | null;   // 该对话的权限模式（acceptEdits/plan/bypassPermissions），null = acceptEdits
   createdAt: number;
@@ -276,7 +277,18 @@ const MODES: { alias: string; name: string; desc: string }[] = [
 // 当前激活对话的工作目录（spawn/listFiles 等都用它）
 function currentWorkspace(): string {
   const c = conversations.find((c) => c.id === activeConvId);
-  return c?.workspace || require('os').homedir();
+  if (c?.workspace) return c.workspace;
+  // 首屏无对话但用户已选过：用 pending 值
+  if (pendingPickedWorkspace) return pendingPickedWorkspace;
+  return require('os').homedir();
+}
+
+// 当前激活对话是否已显式选过工作空间（决定首屏/空态布局）
+function currentWorkspacePicked(): boolean {
+  const c = conversations.find((c) => c.id === activeConvId);
+  if (c) return !!c.workspacePicked;
+  // 首屏无对话：看 pending 标记
+  return pendingPicked;
 }
 
 // 兼容旧的全局 workspace 引用（现在都改成 currentWorkspace()，但部分函数仍引用此变量）
@@ -298,7 +310,13 @@ function loadConversations() {
   } catch (_) { conversations = []; }
   // 向后兼容：老对话没有 workspace/model 字段，补默认值
   const home = require('os').homedir();
-  conversations.forEach((c) => { if (!c.workspace) c.workspace = home; if (!c.model) c.model = null; if (!c.mode) c.mode = null; });
+  conversations.forEach((c) => {
+    if (!c.workspace) c.workspace = home;
+    if (!c.model) c.model = null;
+    if (!c.mode) c.mode = null;
+    // workspacePicked：老数据无此字段 → 视为「选过」（沿用旧布局，避免老用户被打回居中态）
+    if (c.workspacePicked === undefined) c.workspacePicked = true;
+  });
 }
 
 // 当前激活对话用的模型（null = claude 默认）
@@ -428,19 +446,20 @@ function sendConv(convId: string | null, channel: string, ...args: unknown[]) {
 
 // 当前工作空间目录（用户可改）
 ipcMain.handle('claude:set-workspace', (_e, dir: string) => {
-  // 设置当前激活对话的工作目录
-  const c = conversations.find((c) => c.id === activeConvId);
-  if (c) { c.workspace = dir || require('os').homedir(); saveConversations(); }
+  applyWorkspace(dir, true);
   return currentWorkspace();
 });
 ipcMain.handle('claude:get-workspace', () => currentWorkspace());
+ipcMain.handle('claude:workspace-info', () => ({
+  workspace: currentWorkspace(),
+  picked: currentWorkspacePicked(),
+}));
 ipcMain.handle('claude:pick-directory', async () => {
   const { dialog } = require('electron');
   const result = await dialog.showOpenDialog({ properties: ['openDirectory'] });
   if (!result.canceled && result.filePaths.length) {
     const dir = result.filePaths[0];
-    const c = conversations.find((c) => c.id === activeConvId);
-    if (c) { c.workspace = dir; saveConversations(); }
+    applyWorkspace(dir, true);
     return currentWorkspace();
   }
   return null;
@@ -821,6 +840,9 @@ ipcMain.handle('conv:create', (_e, firstMessage?: string) => {
     title: firstMessage ? makeTitle(firstMessage) : '新对话',
     sessionId: null,
     workspace: inheritedWs,
+    // 新对话一律视为「未选过工作空间」：空态时渲染居中主页，
+    // 用户可在该对话内重新选空间，或直接发消息（有消息后 isEmpty=false 自动切常规）
+    workspacePicked: false,
     model: inheritedModel,
     mode: inheritedMode,
     createdAt: Date.now(),
@@ -855,7 +877,90 @@ ipcMain.handle('conv:rename', (_e, id: string, title: string) => {
   return false;
 });
 
-// 兼容旧的 new-chat（建空对话并激活）
+// 导入 session 文件：选 .jsonl（可多选）→ 解析成对话（提取 sessionId/标题/cwd）
+// 已导入过的（sessionId 相同）跳过，返回跳过数给前端提示
+ipcMain.handle('conv:import', async () => {
+  const { dialog } = require('electron');
+  const result = await dialog.showOpenDialog({
+    title: '导入 claude session 对话',
+    properties: ['openFile', 'multiSelections'],
+    filters: [{ name: 'Claude Session', extensions: ['jsonl'] }],
+  });
+  if (result.canceled || result.filePaths.length === 0) {
+    return { conversations, activeId: activeConvId, skipped: 0, canceled: true };
+  }
+  const home = require('os').homedir();
+  const baseWs = currentWorkspace();
+  let skipped = 0;
+  let firstImportedId: string | null = null;
+  const stamp = Date.now();
+  result.filePaths.forEach((file: string, i: number) => {
+    // sessionId 取文件名（claude session 文件名就是 UUID）
+    const sessionId = path.basename(file, '.jsonl');
+    // 去重：已有相同 sessionId 的对话 → 跳过
+    if (conversations.some((c) => c.sessionId === sessionId)) { skipped++; return; }
+    // 解析：提取首条 user 文本（标题）和 cwd（工作目录）
+    let title = '导入的对话';
+    let cwd = '';
+    try {
+      const lines = fs.readFileSync(file, 'utf8').split('\n');
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        let obj: any;
+        try { obj = JSON.parse(line); } catch (_) { continue; }
+        if (!cwd && obj.cwd) cwd = obj.cwd;
+        if (!title || title === '导入的对话') {
+          if (obj?.type === 'user' && obj?.message?.role === 'user') {
+            const c = obj.message.content;
+            if (typeof c === 'string') title = c;
+            else if (Array.isArray(c)) {
+              const txt = c.filter((b: any) => b?.type === 'text').map((b: any) => b.text).join('');
+              if (txt) title = txt;
+            }
+          }
+        }
+        if (cwd && title !== '导入的对话') break;
+      }
+    } catch (_) { /* 读取/解析失败：用默认标题、空 cwd */ }
+    const conv: Conversation = {
+      id: `c-${stamp}-${i}`,
+      title: makeTitle(title) || '导入的对话',
+      sessionId,
+      workspace: cwd || baseWs,
+      workspacePicked: true,
+      model: null,
+      mode: null,
+      createdAt: Date.now(),
+    };
+    conversations.unshift(conv);
+    if (!firstImportedId) firstImportedId = conv.id;
+  });
+  if (firstImportedId) {
+    activeConvId = firstImportedId;
+    saveConversations();
+  }
+  // 全部跳过：列表不变，仅返回 skipped 提示
+  return { conversations, activeId: activeConvId, skipped };
+});
+
+// 首屏（无任何对话时）用户先选过的工作空间：供 conv:create 继承 &
+// getWorkspace 返回，当用户选了空间但还没发消息（无对话）时也能记住
+let pendingPickedWorkspace: string | null = null;
+let pendingPicked: boolean = false;
+
+// 更新当前激活对话的工作空间；无激活对话时记到 pendingPickedWorkspace（等创建对话时继承）
+function applyWorkspace(dir: string, picked: boolean) {
+  const c = conversations.find((c) => c.id === activeConvId);
+  if (c) {
+    c.workspace = dir || require('os').homedir();
+    if (picked) c.workspacePicked = true;
+    saveConversations();
+  } else {
+    // 首屏无对话：暂存，conv:create 时继承
+    pendingPickedWorkspace = dir || null;
+    pendingPicked = picked;
+  }
+}
 ipcMain.handle('claude:new-chat', () => {
   const inheritedWs = currentWorkspace();
   const inheritedModel = currentModel();
@@ -865,6 +970,7 @@ ipcMain.handle('claude:new-chat', () => {
     title: '新对话',
     sessionId: null,
     workspace: inheritedWs,
+    workspacePicked: false,   // 新对话视为未选过空间：空态渲染居中主页
     model: inheritedModel,
     mode: inheritedMode,
     createdAt: Date.now(),

@@ -21,6 +21,7 @@ export function ConversationList({
   onNew,
   onDelete,
   onRename,
+  onImport,
 }: {
   conversations: Conversation[];
   activeId: string | null;
@@ -28,6 +29,7 @@ export function ConversationList({
   onNew: () => void;
   onDelete: (id: string) => void;
   onRename: (id: string, title: string) => void;
+  onImport?: () => Promise<number>;   // 触发导入；返回跳过数供提示
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
@@ -59,11 +61,32 @@ export function ConversationList({
     setEditingId(null);
   };
 
+  // 导入：调用注入的 onImport，跳过的（重复）条目数 >0 时提示
+  const handleImport = async () => {
+    if (!onImport) return;
+    const skipped = await onImport();
+    if (skipped > 0) {
+      window.alert(`已跳过 ${skipped} 条已存在的对话`);
+    }
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, gap: 8 }}>
-      <button onClick={onNew} style={newBtnStyle}>
-        <Icon name="plus" size={14} color="var(--accent)" /> 新对话
-      </button>
+      <div style={{ display: 'flex', gap: 6, alignItems: 'stretch' }}>
+        <button onClick={onNew} style={{ ...newBtnStyle, flex: 1 }}>
+          <Icon name="plus" size={14} color="var(--accent)" /> 新对话
+        </button>
+        {onImport && (
+          <button
+            onClick={handleImport}
+            title="导入 claude session 对话"
+            className="no-drag"
+            style={importBtnStyle}
+          >
+            <Icon name="download" size={14} color="var(--accent)" />
+          </button>
+        )}
+      </div>
 
       {/* 搜索框：内嵌底色，去硬边框 */}
       <div style={{ position: 'relative' }}>
@@ -134,6 +157,13 @@ export function ConversationList({
 const newBtnStyle: React.CSSProperties = {
   width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
   padding: '7px 10px', borderRadius: 8, fontSize: 13, fontWeight: 500,
+  background: 'var(--accent-soft)', color: 'var(--accent)',
+  border: 'none', cursor: 'pointer',
+};
+// 导入按钮：与「新对话」等高并排，图标按钮
+const importBtnStyle: React.CSSProperties = {
+  flex: '0 0 auto', width: 36, display: 'flex', alignItems: 'center', justifyContent: 'center',
+  padding: '7px 0', borderRadius: 8, fontSize: 13, fontWeight: 500,
   background: 'var(--accent-soft)', color: 'var(--accent)',
   border: 'none', cursor: 'pointer',
 };
