@@ -310,6 +310,8 @@ export function useClaude() {
         return { ...prev, [curId]: { messages: [...(c?.messages ?? []), { id: `u-${Date.now()}`, role: 'user', content: text }] } };
       });
     }
+    // 立即标记 thinking，保证串行（下一轮出队在此条 done 后才进行）
+    setStatus('thinking');
     await window.claude.ask(text, useConfirm);
   }, []);
 
@@ -347,6 +349,8 @@ export function useClaude() {
         const baseMsgs = isFirst ? [] : (c?.messages ?? []);
         return { ...prev, [curId!]: { messages: [...baseMsgs, { id: `u-${Date.now()}`, role: 'user', content: trimmed }] } };
       });
+      // 立即标记 thinking，防止后续快速连发同时进入 ask（应入队串行执行）
+      setStatus('thinking');
       await window.claude.ask(trimmed, confirmEnabled);
     },
     [status, activeId, confirmEnabled],
@@ -433,19 +437,15 @@ export function useClaude() {
     setQueue(queueRef.current);
   }, []);
 
-  // 立即执行队列中指定项：从队列移除该条，立即发送（插队，不等当前回复完）
-  // 仅在非 thinking 时有意义；thinking 时调 doSend 会入队，所以这里要求 idle 才执行
+  // 队列项移到队首（下一条执行它）。队列存在时一定在 thinking，不能立即抢断当前回复
   const runQueueItemNow = useCallback((index: number) => {
     const item = queueRef.current[index];
     if (item == null) return;
-    // 从队列移除
-    queueRef.current = queueRef.current.filter((_, i) => i !== index);
+    // 移除原位置，插到队首
+    const rest = queueRef.current.filter((_, i) => i !== index);
+    queueRef.current = [item, ...rest];
     setQueue(queueRef.current);
-    // 立即发送（仅 idle 态；thinking 时这条会重新入队——但用户意图是插队，提示一下）
-    if (status !== 'thinking' && activeId) {
-      doSend(item, activeId, confirmEnabled);
-    }
-  }, [status, activeId, confirmEnabled, doSend]);
+  }, []);
 
   // 变更确认：用户点「执行」→ 第二轮 acceptEdits 重跑；点「拒绝」→ 清掉确认卡片
   const confirmApprove = useCallback(async () => {

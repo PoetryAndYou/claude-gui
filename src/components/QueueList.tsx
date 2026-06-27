@@ -39,9 +39,9 @@ export function QueueList({
             <button
               onClick={() => onRunNow(i)}
               style={iconBtnStyle}
-              title="插队立即执行"
+              title="置顶（下一条执行它）"
             >
-              <svg width="11" height="11" viewBox="0 0 11 11"><path d="M3 2 L9 5.5 L3 9 Z" fill="currentColor"/></svg>
+              <svg width="11" height="11" viewBox="0 0 11 11"><path d="M5.5 1 L9 8 L5.5 6.5 L2 8 Z" fill="currentColor"/></svg>
             </button>
             <button
               onClick={() => onRemove(i)}
