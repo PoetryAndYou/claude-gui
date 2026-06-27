@@ -526,6 +526,7 @@ function executeAsk(prompt: string, confirmEnabled: boolean): Promise<void> {
       sendConv(genConvId, 'claude:status', 'thinking');
       let buffer = '';
       let streamedAnyText = false;  // 是否已收到 text_delta（用于完整块兜底去重）
+      let assistantFullTextSent = false;  // 完整 text 块是否已补差量（防重复）
       let anyOutput = false;        // 是否产生过任何 stdout（用于检测"启动即崩"）
 
       try {
@@ -587,9 +588,16 @@ function executeAsk(prompt: string, confirmEnabled: boolean): Promise<void> {
                 name: block.name,
                 input: block.input,
               });
-            } else if (block.type === 'text' && block.text && !streamedAnyText) {
-              // 兜底：若没收到任何 text_delta（旧 claude / 非 streaming 路径），整段吐出
-              streamText(genConvId, String(block.text));
+            } else if (block.type === 'text' && block.text) {
+              // 完整 text 块：若没流式过（旧 claude）整段吐出；
+              // 若流式过，对比已发内容补差量（防止思考时间长导致流式不完整丢消息）
+              if (!streamedAnyText) {
+                streamText(genConvId, String(block.text));
+              } else if (!assistantFullTextSent) {
+                // 标记完整 text 已处理（一个 assistant 消息只补一次差量）
+                assistantFullTextSent = true;
+                sendConv(genConvId, 'claude:full-text', String(block.text));
+              }
             }
           }
         }

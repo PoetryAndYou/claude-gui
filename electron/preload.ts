@@ -71,6 +71,8 @@ export interface ClaudeAPI {
   confirmApprove: () => Promise<void>;   // 用户点「执行」→ 第二轮 acceptEdits 重跑
   confirmReject: () => Promise<void>;    // 用户点「拒绝」→ 清空待确认状态
   onChunk: (cb: (convId: string, text: string) => void) => void;
+  // 完整 text 块（流式可能不完整时补差量用）
+  onFullText: (cb: (convId: string, text: string) => void) => void;
   onStatus: (cb: (convId: string, status: string) => void) => void;
   onError: (cb: (convId: string, msg: string) => void) => void;
   onUsage: (cb: (convId: string, usage: Usage) => void) => void;
@@ -115,6 +117,8 @@ contextBridge.exposeInMainWorld('claude', {
   confirmReject: () => ipcRenderer.invoke('claude:confirm-reject'),
   onChunk: (cb: (convId: string, text: string) => void) =>
     ipcRenderer.on('claude:chunk', (_e, convId, text) => cb(convId, text)),
+  onFullText: (cb: (convId: string, text: string) => void) =>
+    ipcRenderer.on('claude:full-text', (_e, convId, text) => cb(convId, text)),
   onStatus: (cb: (convId: string, status: string) => void) =>
     ipcRenderer.on('claude:status', (_e, convId, status) => cb(convId, status)),
   onError: (cb: (convId: string, msg: string) => void) =>

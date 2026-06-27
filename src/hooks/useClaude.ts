@@ -101,6 +101,28 @@ export function useClaude() {
       chunkBuf.current[convId] = (chunkBuf.current[convId] || '') + text;
       scheduleFlush();
     });
+    // 完整 text 块：思考时间长时流式 delta 可能不完整，用完整块补全/替换
+    api.onFullText((convId, fullText) => {
+      const sid = streamingIds.current[convId];
+      if (!sid) return;
+      setConvs((prev) => {
+        const c = prev[convId];
+        if (!c) return prev;
+        return {
+          ...prev,
+          [convId]: {
+            messages: c.messages.map((m) => {
+              if (m.id !== sid || m.role !== 'assistant') return m;
+              // 完整 text 比流式累积长，说明流式丢了，用完整 text 替换
+              if (fullText.length > (m.content || '').length) {
+                return { ...m, content: fullText };
+              }
+              return m;
+            }),
+          },
+        };
+      });
+    });
     api.onStatus((convId, s) => {
       if (s === 'thinking') {
         if (convId === activeIdRef.current) setStatus('thinking');
