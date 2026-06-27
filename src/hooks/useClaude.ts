@@ -164,19 +164,17 @@ export function useClaude() {
         if (convId === activeIdRef.current) {
           setStatus(s === 'done' ? 'idle' : 'error');
         }
-        // 消息队列：当前回复 done 后，自动出队下一条（仅成功时；error 不自动继续）
-        // 用 setTimeout 让 UI 先渲染完成态；doSend 内部会立即重置 thinking 保证串行
+        // 消息队列：当前回复 done 后，立即出队下一条（仅成功时；error 不自动继续）
+        // 不延迟：done 时 claude 已结束，立即发下一条；doSend 内部 setStatus('thinking') 保证串行
         if (s === 'done' && queueRef.current.length > 0) {
           const next = queueRef.current[0];
           queueRef.current = queueRef.current.slice(1);
           setQueue(queueRef.current);
           // 目标对话 = 当前 done 的对话（保证队列在哪发的就在哪执行）
           const targetConvId = convId;
-          setTimeout(() => {
-            if (next) {
-              doSend(next, targetConvId, confirmEnabledRef.current, true);
-            }
-          }, 80);
+          if (next) {
+            doSend(next, targetConvId, confirmEnabledRef.current, true);
+          }
         }
       } else if (s === 'awaiting-confirm') {
         // 第一轮结束、等待用户确认：不解除 thinking 状态（仍在等待），保留 streaming 消息可继续接收
