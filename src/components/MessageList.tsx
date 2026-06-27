@@ -40,12 +40,18 @@ export function MessageList({
   }, []);
 
   // 滚动监听：用户上滚 → atBottom=false（流式不再强行拽回底）
+  // 依赖 hasContainer：首条消息后滚动容器才挂载，必须重新绑定监听，
+  // 否则空态时 effect 跑一次拿到 scrollRef=null 就早退，之后监听永远不生效
+  const hasContainer = messages.length > 0;
   useEffect(() => {
+    if (!hasContainer) return;
     const el = scrollRef.current;
     if (!el) return;
     el.addEventListener('scroll', checkBottom, { passive: true });
+    // 容器刚挂载 → 立即校正一次贴底状态（否则 atBottom 残留旧值）
+    checkBottom();
     return () => el.removeEventListener('scroll', checkBottom);
-  }, [checkBottom]);
+  }, [hasContainer, checkBottom]);
 
   // 在底部时，新消息/流式更新自动跟随到底
   // 对话切换（messages 引用突变、非连续增长）瞬间到底；流式追加平滑跟随
@@ -63,12 +69,17 @@ export function MessageList({
       if (isSwitch) setNewCount(0);
       return;
     }
-    // 切换对话：瞬间到底（auto）；正常追加：平滑（smooth）
-    bottomRef.current?.scrollIntoView({ behavior: isSwitch ? 'auto' : 'smooth', block: 'end' });
-  }, [messages, atBottom]);
+    // 切对话：瞬间到底（auto）；流式内容更新（思考中、数组长度不变）：瞬间跟随，
+    //   否则 smooth 滚动追不上不断增长的 scrollHeight，永远到不了最新消息；
+    // 新消息追加等其它情况：平滑（smooth）
+    const isStreaming = !isSwitch && !!prev && messages.length === prev.length && status === 'thinking';
+    const behavior: ScrollBehavior = (isSwitch || isStreaming) ? 'auto' : 'smooth';
+    bottomRef.current?.scrollIntoView({ behavior, block: 'end' });
+  }, [messages, atBottom, status]);
 
   const scrollToBottom = () => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // 思考中底部不断增高，smooth 动画追不上 → 用 auto 瞬到底
+    bottomRef.current?.scrollIntoView({ behavior: status === 'thinking' ? 'auto' : 'smooth' });
     setAtBottom(true);
   };
 

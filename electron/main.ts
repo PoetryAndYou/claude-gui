@@ -467,9 +467,15 @@ ipcMain.handle('claude:set-mode', (_e, mode: string | null) => {
 // 启动一次 claude 对话
 // confirmEnabled: 是否走两轮（第一轮 default 预览，第二轮 acceptEdits 执行）
 // 核心执行体：抽出来供 claude:ask 和 claude:confirm-approve 复用
-function executeAsk(prompt: string, confirmEnabled: boolean): Promise<void> {
+// onDone 回调：claude 进程真正结束（result 事件 / close）后调用，闸门用它驱动串行
+function executeAsk(prompt: string, confirmEnabled: boolean, onDone?: () => void): Promise<void> {
   return new Promise<void>((resolve) => {
     let retried = false;
+    // 统一收尾：保证 onDone 只调一次（多个 resolve 路径都可能触发）
+    let doneFired = false;
+    const fireDone = () => { if (!doneFired) { doneFired = true; onDone?.(); } };
+    // 包装 resolve：先触发 onDone，再 resolve 给闸门
+    const done = () => { fireDone(); resolve(); };
     // 记住本次生成属于哪个对话，切对话不影响后台 chunk 路由
     const genConvId = activeConvId;
     // 降级保护：确认模式依赖 --permission-mode（default/acceptEdits 切换）。
@@ -534,7 +540,7 @@ function executeAsk(prompt: string, confirmEnabled: boolean): Promise<void> {
           `  • ${home}\\AppData\\Local\\nvm\\<版本>\\claude.cmd`;
         sendConv(genConvId, 'claude:error', diag);
         sendConv(genConvId, 'claude:status', 'error');
-        resolve();
+        done();
         return;
       }
 
@@ -562,7 +568,7 @@ function executeAsk(prompt: string, confirmEnabled: boolean): Promise<void> {
       } catch (e) {
         send('claude:error', `无法启动 claude: ${(e as Error).message}`);
         send('claude:status', 'error');
-        resolve();
+        done();
         return;
       }
 
@@ -694,19 +700,19 @@ function executeAsk(prompt: string, confirmEnabled: boolean): Promise<void> {
         : `claude 启动失败: ${err.message}`;
       sendConv(genConvId, 'claude:error', msg);
       sendConv(genConvId, 'claude:status', 'error');
-      resolve();
+      done();
     });
 
     currentProc!.on('close', (code) => {
       if (buffer.trim()) onLine(buffer);
-      if (retried) { resolve(); return; }
+      if (retried) { done(); return; }
       // 启动即崩没输出（典型：旧版 claude 不认 --permission-mode / --include-partial-messages）
       // 必须明确报错，否则前端从 thinking→done 无内容，看起来就是"转圈后空白"
       if (!anyOutput && stderrBuf.trim()) {
         sendConv(genConvId, 'claude:error',
           `claude 启动失败（退出码 ${code}）：${stderrBuf.trim()}\n\n请升级 claude: npm install -g @anthropic-ai/claude-code@latest`);
         sendConv(genConvId, 'claude:status', 'error');
-        resolve();
+        done();
         return;
       }
       if (code !== 0 && stderrBuf.trim() && !retried) {
@@ -721,7 +727,7 @@ function executeAsk(prompt: string, confirmEnabled: boolean): Promise<void> {
           sendConv(genConvId, 'claude:status', 'done');
         }
         currentProc = null;
-        resolve();
+        done();
       };
       if (pendingDelay > 0) setTimeout(finish, pendingDelay + 60);
       else finish();
@@ -735,8 +741,31 @@ function executeAsk(prompt: string, confirmEnabled: boolean): Promise<void> {
 }
 
 // 发起对话（前端入口）
+// main 进程串行闸门：用 executeAsk 的 onDone 回调（claude 真正结束时触发）驱动下一条
+// 不用 Promise.then：executeAsk 的 resolve 时机和 claude close 不一致，onDone 才准确
+let askBusy = false;
+let askQueue: Array<{ prompt: string; confirmEnabled: boolean; resolve: () => void }> = [];
+function runAskOne(prompt: string, confirmEnabled: boolean, onQueueDone: () => void) {
+  askBusy = true;
+  executeAsk(prompt, confirmEnabled, () => {
+    if (askQueue.length > 0) {
+      const item = askQueue.shift()!;
+      runAskOne(item.prompt, item.confirmEnabled, () => item.resolve());
+    } else {
+      askBusy = false;
+    }
+    onQueueDone();
+  });
+}
 ipcMain.handle('claude:ask', (_e, prompt: string, confirmEnabled = false) => {
-  return executeAsk(prompt, confirmEnabled);
+  if (askBusy) {
+    return new Promise<void>((resolve) => {
+      askQueue.push({ prompt, confirmEnabled, resolve });
+    });
+  }
+  return new Promise<void>((resolve) => {
+    runAskOne(prompt, confirmEnabled, () => resolve());
+  });
 });
 
 // 用户点「执行」：用 acceptEdits 重跑第一轮的 prompt（第二轮真正落地）

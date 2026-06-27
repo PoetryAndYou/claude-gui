@@ -168,11 +168,12 @@ export function useClaude() {
           setStatusSynced(s === 'done' ? 'idle' : 'error');
         }
         // 消息队列：当前回复 done 后，立即出队下一条（仅成功时；error 不自动继续）
-        // 不延迟：done 时 claude 已结束，立即发下一条；doSend 内部 setStatus('thinking') 保证串行
+        // 不延迟：done 时 claude 已结束，立即发下一条；doSend 内部 setStatusSynced('thinking') 保证串行
         if (s === 'done' && queueRef.current.length > 0) {
           const next = queueRef.current[0];
           queueRef.current = queueRef.current.slice(1);
           setQueue(queueRef.current);
+          console.log(`[Q] 出队发送: "${next.slice(0,20)}" (剩${queueRef.current.length}条)`);
           // 目标对话 = 当前 done 的对话（保证队列在哪发的就在哪执行）
           const targetConvId = convId;
           if (next) {
@@ -326,7 +327,8 @@ export function useClaude() {
       if (!trimmed) return;
       setError('');
       // 思考中（含等待确认）：仅入队，不立即显示（保证消息和回答一一对应，顺序不打乱）
-      // 用 statusRef 同步判断，避免连发时读到旧 state 没入队
+      // 用 statusRef 同步判断，避免连发时读到旧 state 没入队；
+      // main 进程也有串行闸门（askBusy），双保险
       if (statusRef.current === 'thinking') {
         queueRef.current = [...queueRef.current, trimmed];
         setQueue(queueRef.current);
