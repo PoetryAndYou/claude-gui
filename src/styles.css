@@ -115,6 +115,18 @@ button, input, textarea, a, .no-drag { -webkit-app-region: no-drag; }
   30% { transform: translateY(-5px); opacity: 1; }
 }
 
+/* 浮动按钮入场动画（跳到最新按钮） */
+@keyframes floatIn {
+  from { opacity: 0; transform: translateY(8px) scale(.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* 流式中绿色状态点呼吸（跳到最新按钮上的活跃指示） */
+@keyframes pulseGreen {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.85); }
+}
+
 /* markdown 排版 */
 .markdown-body { font-size: 14px; line-height: 1.6; }
 .markdown-body p { margin: 0 0 8px; }

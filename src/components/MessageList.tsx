@@ -21,6 +21,9 @@ export function MessageList({
   const bottomRef = useRef<HTMLDivElement>(null);
   // 用户是否在底部附近（决定自动滚底 + 是否显示"回到底部"按钮）
   const [atBottom, setAtBottom] = useState(true);
+  // 记录"离开底部时"的消息数，用于计算悬浮按钮上的"新消息 N"计数
+  const [newCount, setNewCount] = useState(0);
+  const leaveBottomCount = useRef(0);
   // 记录上次 messages 引用，用于区分"对话切换"(瞬间到底) vs "流式追加"(平滑跟随)
   const prevMsgsRef = useRef<Message[] | null>(null);
 
@@ -28,7 +31,12 @@ export function MessageList({
   const checkBottom = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
-    setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 32);
+    const now = el.scrollHeight - el.scrollTop - el.clientHeight < 32;
+    setAtBottom((prev) => {
+      // 从"离开"变为"贴底"：清零新消息计数
+      if (now && !prev) setNewCount(0);
+      return now;
+    });
   }, []);
 
   // 滚动监听：用户上滚 → atBottom=false（流式不再强行拽回底）
@@ -42,14 +50,19 @@ export function MessageList({
   // 在底部时，新消息/流式更新自动跟随到底
   // 对话切换（messages 引用突变、非连续增长）瞬间到底；流式追加平滑跟随
   useEffect(() => {
-    if (!atBottom) {
-      prevMsgsRef.current = messages;
-      return;
-    }
     const prev = prevMsgsRef.current;
     // 判断是否是对话切换：引用不同 + 新长度没有连续增长（变小或全新数组）
     const isSwitch = prev !== messages && (prev === null || messages.length < prev.length || messages[0] !== prev[0]);
     prevMsgsRef.current = messages;
+    // 离开底部时有新消息到来：累加 newCount（用户能看到"新消息 N"提示）
+    if (!atBottom && !isSwitch && prev && messages.length > prev.length) {
+      setNewCount((c) => c + (messages.length - prev.length));
+    }
+    if (!atBottom) {
+      // 切对话时重置计数
+      if (isSwitch) setNewCount(0);
+      return;
+    }
     // 切换对话：瞬间到底（auto）；正常追加：平滑（smooth）
     bottomRef.current?.scrollIntoView({ behavior: isSwitch ? 'auto' : 'smooth', block: 'end' });
   }, [messages, atBottom]);
@@ -105,15 +118,23 @@ export function MessageList({
           <div ref={bottomRef} />
         </div>
       </div>
-      {/* 不在底部时：浮动"回到底部"按钮（流式中还显示状态点） */}
+      {/* 不在底部时：浮动"跳到最新"按钮（毛玻璃 + 新消息计数 + 流式状态点） */}
       {!atBottom && (
         <button
           onClick={scrollToBottom}
-          title="回到底部"
+          title="跳到最新消息"
           style={scrollBtnStyle}
+          className="no-drag"
         >
-          <Icon name="arrowDown" size={16} color="var(--text-soft)" />
+          {newCount > 0 && (
+            <span style={badgeStyle}>{newCount > 99 ? '99+' : newCount}</span>
+          )}
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="var(--accent)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M6.5 2.5 L6.5 10" />
+            <path d="M3 7 L6.5 10.5 L10 7" />
+          </svg>
           {status === 'thinking' && <span style={liveDotStyle} />}
+          {newCount > 0 && <span style={labelStyle}>{newCount > 99 ? '99+' : newCount} 条新消息</span>}
         </button>
       )}
     </div>
@@ -121,13 +142,30 @@ export function MessageList({
 }
 
 const scrollBtnStyle: React.CSSProperties = {
-  position: 'absolute', right: 24, bottom: 16, zIndex: 20,
-  width: 34, height: 34, borderRadius: 17,
-  display: 'flex', alignItems: 'center', justifyContent: 'center',
-  background: 'var(--bg-elev)', border: '1px solid var(--border)',
-  boxShadow: '0 4px 14px var(--shadow)', cursor: 'pointer',
+  position: 'absolute', right: 24, bottom: 20, zIndex: 20,
+  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+  height: 36, padding: '0 12px', borderRadius: 18,
+  color: 'var(--text-soft)', fontFamily: 'inherit', fontSize: 12,
+  background: 'var(--bg-elev)',
+  border: '1px solid var(--border)',
+  boxShadow: '0 6px 20px var(--shadow), 0 2px 6px var(--shadow)',
+  backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+  cursor: 'pointer',
+  transition: 'transform .15s, box-shadow .15s, background .15s',
+  animation: 'floatIn .2s ease-out',
+};
+// 新消息计数徽章（小圆点，无文字时显示）
+const badgeStyle: React.CSSProperties = {
+  minWidth: 16, height: 16, padding: '0 4px', borderRadius: 8,
+  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+  background: 'var(--accent)', color: 'var(--bg-app)',
+  fontSize: 10, fontWeight: 700, lineHeight: 1,
 };
 const liveDotStyle: React.CSSProperties = {
-  position: 'absolute', top: 7, right: 7,
-  width: 7, height: 7, borderRadius: '50%', background: 'var(--accent)',
+  width: 6, height: 6, borderRadius: '50%', background: 'var(--green)',
+  animation: 'pulseGreen 1.5s ease-in-out infinite', flex: '0 0 auto',
+};
+const labelStyle: React.CSSProperties = {
+  fontSize: 12, fontWeight: 500, color: 'var(--text-soft)',
+  whiteSpace: 'nowrap',
 };
