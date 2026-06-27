@@ -21,6 +21,8 @@ export function MessageList({
   const bottomRef = useRef<HTMLDivElement>(null);
   // 用户是否在底部附近（决定自动滚底 + 是否显示"回到底部"按钮）
   const [atBottom, setAtBottom] = useState(true);
+  // 记录上次 messages 引用，用于区分"对话切换"(瞬间到底) vs "流式追加"(平滑跟随)
+  const prevMsgsRef = useRef<Message[] | null>(null);
 
   // 判断是否贴底（留 32px 容差，避免亚像素导致永远 false）
   const checkBottom = useCallback(() => {
@@ -38,8 +40,18 @@ export function MessageList({
   }, [checkBottom]);
 
   // 在底部时，新消息/流式更新自动跟随到底
+  // 对话切换（messages 引用突变、非连续增长）瞬间到底；流式追加平滑跟随
   useEffect(() => {
-    if (atBottom) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (!atBottom) {
+      prevMsgsRef.current = messages;
+      return;
+    }
+    const prev = prevMsgsRef.current;
+    // 判断是否是对话切换：引用不同 + 新长度没有连续增长（变小或全新数组）
+    const isSwitch = prev !== messages && (prev === null || messages.length < prev.length || messages[0] !== prev[0]);
+    prevMsgsRef.current = messages;
+    // 切换对话：瞬间到底（auto）；正常追加：平滑（smooth）
+    bottomRef.current?.scrollIntoView({ behavior: isSwitch ? 'auto' : 'smooth', block: 'end' });
   }, [messages, atBottom]);
 
   const scrollToBottom = () => {
