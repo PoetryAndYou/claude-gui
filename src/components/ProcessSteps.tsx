@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, memo } from 'react';
 import type { ToolEvent } from '../../electron/preload';
 import type { Theme } from '../hooks/useClaude';
 import { Icon } from './Icon';
@@ -231,7 +231,7 @@ function resultPreStyle(isError?: boolean): React.CSSProperties {
 }
 
 // 过程展示：思考 + 工具调用的有序列表（流式时新内容自动展开顶栏摘要）
-export function ProcessSteps({
+export const ProcessSteps = memo(function ProcessSteps({
   events, streaming,
 }: {
   events: ToolEvent[]; streaming: boolean;
@@ -250,4 +250,4 @@ export function ProcessSteps({
       ))}
     </div>
   );
-}
+});

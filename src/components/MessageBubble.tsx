@@ -64,7 +64,7 @@ function UserImages({ paths }: { paths: string[] }) {
 }
 
 // markdown 渲染封装（代码块/行内 code 规则）
-function Markdown({ content, theme }: { content: string; theme: Theme }) {
+function Markdown({ content, theme, streaming }: { content: string; theme: Theme; streaming?: boolean }) {
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
@@ -76,7 +76,7 @@ function Markdown({ content, theme }: { content: string; theme: Theme }) {
           // 否则视为行内 code（不套带复制按钮的 CodeBlock，避免满屏复制按钮）
           const isBlock = !!match || text.includes('\n');
           if (isBlock) {
-            return <CodeBlock language={match ? match[1] : 'text'} theme={theme}>{text.replace(/\n$/, '')}</CodeBlock>;
+            return <CodeBlock language={match ? match[1] : 'text'} theme={theme} streaming={streaming}>{text.replace(/\n$/, '')}</CodeBlock>;
           }
           return <code style={inlineCodeStyle} {...props}>{children}</code>;
         },
@@ -87,18 +87,23 @@ function Markdown({ content, theme }: { content: string; theme: Theme }) {
   );
 }
 
-// 流式中 markdown：节流渲染（每 ~150ms 最多解析一次），避免长答案每个 delta 都全量重解析卡顿
+// 流式中 markdown：节流渲染 + 长文本降级纯文本，避免每个 delta 全量重解析卡顿
 function StreamingMarkdown({ content, theme }: { content: string; theme: Theme }) {
   const [shown, setShown] = useState(content);
   const last = useRef(0);
   const raf = useRef<number | null>(null);
   useEffect(() => {
     const now = Date.now();
-    if (now - last.current >= 150) {
+    // 内容超过 4000 字符时降级：纯文本直接显示，不再走 ReactMarkdown（避免卡顿）
+    if (content.length > 4000) {
+      setShown(content);
+      return;
+    }
+    // 节流：每 250ms 最多解析一次（长答案时降低重渲染频率）
+    if (now - last.current >= 250) {
       last.current = now;
       setShown(content);
     } else if (raf.current == null) {
-      // 延迟到下一次空闲帧再更新，保证最后一次内容一定渲染
       raf.current = requestAnimationFrame(() => {
         raf.current = null;
         last.current = Date.now();
@@ -107,19 +112,23 @@ function StreamingMarkdown({ content, theme }: { content: string; theme: Theme }
     }
     return () => { if (raf.current != null) { cancelAnimationFrame(raf.current); raf.current = null; } };
   }, [content]);
+  // 长内容降级：纯文本 pre-wrap，不用 markdown（保留换行和代码缩进）
+  if (shown.length > 4000) {
+    return <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{shown}</div>;
+  }
   return <Markdown content={shown} theme={theme} />;
 }
 
-// 流式实时计时器：从 startedAt 起每 100ms 跳动，显示「⏱ X.Xs」
-function LiveTimer({ startedAt }: { startedAt: number }) {
+// 流式实时计时器：从 startedAt 起每 500ms 跳动（降低重渲染频率），显示「⏱ X.Xs」
+const LiveTimer = memo(function LiveTimer({ startedAt }: { startedAt: number }) {
   const [, force] = useState(0);
   useEffect(() => {
-    const t = setInterval(() => force((n) => n + 1), 100);
+    const t = setInterval(() => force((n) => n + 1), 500);
     return () => clearInterval(t);
   }, []);
   const sec = (Date.now() - startedAt) / 1000;
   return <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>⏱ {sec.toFixed(1)}s</span>;
-}
+});
 
 // 用量条：1.2k tokens · 3.4s · $0.01
 function UsageBar({ usage }: { usage: Usage }) {
@@ -142,8 +151,8 @@ const inlineCodeStyle: React.CSSProperties = {
   fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
 };
 
-// 带复制按钮的代码块包装
-function CodeBlock({ language, children, theme }: { language: string; children: string; theme: Theme }) {
+// 带复制按钮的代码块包装。memo 化：内容不变就不重渲染（流式中其他消息更新不触发）
+const CodeBlock = memo(function CodeBlock({ language, children, theme, streaming }: { language: string; children: string; theme: Theme; streaming?: boolean }) {
   const [copied, setCopied] = useState(false);
   const [hovered, setHovered] = useState(false);
   const copy = () => {
@@ -161,16 +170,23 @@ function CodeBlock({ language, children, theme }: { language: string; children: 
         <Icon name={copied ? 'check' : 'copy'} size={12} color={copied ? 'var(--green)' : 'var(--text-muted)'} />
         <span style={{ color: copied ? 'var(--green)' : 'var(--text-muted)' }}>{copied ? '已复制' : '复制'}</span>
       </button>
-      <SyntaxHighlighter
-        language={language}
-        style={theme === 'light' ? (oneLight as any) : (vscDarkPlus as any)}
-        customStyle={{ margin: 0, borderRadius: 8, fontSize: 13, paddingTop: 30 }}
-      >
-        {children}
-      </SyntaxHighlighter>
+      {streaming ? (
+        // 流式中：纯 pre 显示代码（不跑语法高亮，避免每个 delta 重算高亮卡顿），完成后才高亮
+        <pre style={{ margin: 0, borderRadius: 8, fontSize: 13, padding: '30px 12px 12px', background: theme === 'light' ? '#f6f8fa' : '#161b22', color: theme === 'light' ? '#1f2328' : '#e6edf3', overflow: 'auto', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+          <code>{children}</code>
+        </pre>
+      ) : (
+        <SyntaxHighlighter
+          language={language}
+          style={theme === 'light' ? (oneLight as any) : (vscDarkPlus as any)}
+          customStyle={{ margin: 0, borderRadius: 8, fontSize: 13, paddingTop: 30 }}
+        >
+          {children}
+        </SyntaxHighlighter>
+      )}
     </div>
   );
-}
+});
 
 // 加载动画：三个错峰跳动的圆点（思考中状态）
 function ThreeDotsSpinner() {
@@ -239,7 +255,20 @@ function EditToggleBtn({ onEdit }: { onEdit: () => void }) {
   );
 }
 
-export const MessageBubble = memo(function MessageBubble({
+export const MessageBubble = memo(MessageBubbleImpl, (prev, next) => {
+  // 自定义 memo 比较：减少不必要重渲染
+  // 内容/事件/streaming/theme/canAct 变化才重渲染；回调引用变化不触发（onRegenerate/onEdit 用 useCallback 稳定）
+  if (prev.streaming !== next.streaming) return false;
+  if (prev.theme !== next.theme) return false;
+  if (prev.canAct !== next.canAct) return false;
+  if (prev.message.content !== next.message.content) return false;
+  if (prev.message.usage !== next.message.usage) return false;
+  if (prev.message.events !== next.message.events) return false;
+  if (prev.message.pendingChanges !== next.message.pendingChanges) return false;
+  return true;
+});
+
+function MessageBubbleImpl({
   message, streaming, theme,
   onRegenerate, onEdit, canAct,
 }: {
@@ -379,4 +408,4 @@ export const MessageBubble = memo(function MessageBubble({
       </div>
     </div>
   );
-});
+}
