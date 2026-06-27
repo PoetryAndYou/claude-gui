@@ -164,14 +164,18 @@ export function useClaude() {
         if (convId === activeIdRef.current) {
           setStatus(s === 'done' ? 'idle' : 'error');
         }
-        // 消息队列：当前回复结束后，自动出队发送下一条（仅成功时；error 不自动继续）
-        if (s === 'done' && queueRef.current.length > 0 && convId === activeIdRef.current) {
+        // 消息队列：当前回复 done 后，自动出队下一条（仅成功时；error 不自动继续）
+        // 用 setTimeout 让 UI 先渲染完成态；doSend 内部会立即重置 thinking 保证串行
+        if (s === 'done' && queueRef.current.length > 0) {
           const next = queueRef.current[0];
           queueRef.current = queueRef.current.slice(1);
           setQueue(queueRef.current);
-          // 短延迟，让 UI 先渲染完成态再发起下一轮
+          // 目标对话 = 当前 done 的对话（保证队列在哪发的就在哪执行）
+          const targetConvId = convId;
           setTimeout(() => {
-            if (next) doSend(next, convId, confirmEnabledRef.current, true);  // skipDisplay: 入队时已显示
+            if (next) {
+              doSend(next, targetConvId, confirmEnabledRef.current, true);
+            }
           }, 80);
         }
       } else if (s === 'awaiting-confirm') {
@@ -320,16 +324,18 @@ export function useClaude() {
       const trimmed = text.trim();
       if (!trimmed) return;
       setError('');
-          // 思考中（含等待确认）：立即显示用户消息 + 入队，当前回复 done 后自动发送
+      // 思考中（含等待确认）：立即显示用户消息 + 入队，当前回复 done 后自动发送
       if (status === 'thinking') {
         queueRef.current = [...queueRef.current, trimmed];
         setQueue(queueRef.current);
-        // 立即显示这条排队消息（让用户看到自己排了什么），出队时只发 ask 不再重复显示
-        if (activeId) {
+        // 立即显示这条排队消息（用 ref 拿最新 activeId，避免闭包过期）
+        const cid = activeIdRef.current;
+        if (cid) {
           setConvs((prev) => {
-            const c = prev[activeId];
-            if (!c) return prev;
-            return { ...prev, [activeId]: { messages: [...c.messages, { id: `u-${Date.now()}`, role: 'user', content: trimmed }] } };
+            const c = prev[cid];
+            // 对话状态可能还没初始化，兜底用 []
+            const baseMsgs = c?.messages ?? [];
+            return { ...prev, [cid]: { messages: [...baseMsgs, { id: `u-${Date.now()}`, role: 'user', content: trimmed }] } };
           });
         }
         return;
