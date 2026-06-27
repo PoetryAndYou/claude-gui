@@ -46,7 +46,9 @@ export function Sidebar({
     if (dir) setWorkspace(dir);
   };
 
-  const load = async () => {
+  const load = async (force = false) => {
+    // 已加载且非强制刷新：直接显示（不跑 claude，避免覆盖对话）
+    if (loaded && !force) return;
     setLoading(true);
     setLoaded(true);
     const list = await window.claude.getCommands();
@@ -89,10 +91,27 @@ export function Sidebar({
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{shortPath.length > 22 ? '…' + shortPath.slice(-21) : shortPath || '选择工作空间'}</span>
         </button>
 
-        <button onClick={load} style={{ ...footerBtnStyle, color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 7 }}>
-          <Icon name="zap" size={14} color="var(--accent)" />
-          {loading ? '加载中…' : loaded ? '刷新命令/技能' : '加载命令/技能'}
-        </button>
+        {/* 查看 + 刷新 分开：查看仅展示已加载（不跑 claude 不覆盖对话）；刷新才重新拉取 */}
+        <div style={{ display: 'flex', gap: 6, alignItems: 'stretch' }}>
+          <button onClick={() => load(false)} style={{ ...footerBtnStyle, flex: 1, color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 7 }}>
+            <Icon name="zap" size={14} color="var(--accent)" />
+            {loaded ? '收起/展开命令技能' : '查看命令/技能'}
+          </button>
+          <button
+            onClick={() => load(true)}
+            title="刷新（重新从 claude 拉取）"
+            style={{
+              flex: '0 0 auto', width: 34, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'rgba(128,128,128,.1)', border: '1px solid transparent', cursor: 'pointer',
+              borderRadius: 7, color: 'var(--text-muted)', fontFamily: 'inherit',
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" style={{ animation: loading ? 'spin .8s linear infinite' : 'none', transformOrigin: 'center' }}>
+              <path d="M11.5 5 A4.5 4.5 0 1 0 12.5 8" />
+              <path d="M11.5 2 L11.5 5 L8.5 5" />
+            </svg>
+          </button>
+        </div>
 
         {/* 三组列表 */}
         {loaded && !loading && (
