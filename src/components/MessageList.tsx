@@ -53,38 +53,35 @@ export function MessageList({
     return () => el.removeEventListener('scroll', checkBottom);
   }, [hasContainer, checkBottom]);
 
-  // 滚动到底部的工具函数：直接设 scrollTop，比 scrollIntoView 更可靠
-  const scrollToBottomNow = useCallback((smooth: boolean) => {
-    const el = scrollRef.current;
-    if (!el) return;
-    el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
-  }, []);
-
   // 在底部时，新消息/流式更新自动跟随到底
+  // 对话切换（messages 引用突变、非连续增长）瞬间到底；流式追加平滑跟随
   useEffect(() => {
     const prev = prevMsgsRef.current;
+    // 判断是否是对话切换：引用不同 + 新长度没有连续增长（变小或全新数组）
     const isSwitch = prev !== messages && (prev === null || messages.length < prev.length || messages[0] !== prev[0]);
     prevMsgsRef.current = messages;
+    // 离开底部时有新消息到来：累加 newCount（用户能看到"新消息 N"提示）
     if (!atBottom && !isSwitch && prev && messages.length > prev.length) {
       setNewCount((c) => c + (messages.length - prev.length));
     }
     if (!atBottom) {
+      // 切对话时重置计数
       if (isSwitch) setNewCount(0);
       return;
     }
+    // 切对话：瞬间到底（auto）；流式内容更新（思考中、数组长度不变）：瞬间跟随，
+    //   否则 smooth 滚动追不上不断增长的 scrollHeight，永远到不了最新消息；
+    // 新消息追加等其它情况：平滑（smooth）
     const isStreaming = !isSwitch && !!prev && messages.length === prev.length && status === 'thinking';
-    // double rAF：等 React 提交 DOM + 浏览器完成布局后滚动
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        scrollToBottomNow(!(isSwitch || isStreaming));
-      });
-    });
-  }, [messages, atBottom, status]); // eslint-disable-line react-hooks/exhaustive-deps
+    const behavior: ScrollBehavior = (isSwitch || isStreaming) ? 'auto' : 'smooth';
+    bottomRef.current?.scrollIntoView({ behavior, block: 'end' });
+  }, [messages, atBottom, status]);
 
-  const scrollToBottom = useCallback(() => {
-    scrollToBottomNow(status !== 'thinking');
+  const scrollToBottom = () => {
+    // 思考中底部不断增高，smooth 动画追不上 → 用 auto 瞬到底
+    bottomRef.current?.scrollIntoView({ behavior: status === 'thinking' ? 'auto' : 'smooth' });
     setAtBottom(true);
-  }, [status, scrollToBottomNow]);
+  };
 
   if (messages.length === 0) {
     return (
@@ -106,8 +103,8 @@ export function MessageList({
   const canAct = status !== 'thinking';
 
   return (
-    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', background: 'var(--bg-app)' }}>
-      <div ref={scrollRef} style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '10px 10px' }}>
+    <div style={{ position: 'relative', flex: 1, minHeight: 0, background: 'var(--bg-app)' }}>
+      <div ref={scrollRef} style={{ height: '100%', overflowY: 'auto', padding: '10px 10px' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 820, margin: '0 auto' }}>
           {messages.map((m) => (
             <div key={m.id}>
