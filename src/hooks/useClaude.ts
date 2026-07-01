@@ -335,8 +335,9 @@ export function useClaude() {
         return { ...prev, [curId]: { messages: [...(c?.messages ?? []), { id: `u-${Date.now()}`, role: 'user', content: text }] } };
       });
     }
-    // 立即标记 thinking（同步 ref），保证串行（下一轮出队在此条 done 后才进行）
-    setStatusSynced('thinking');
+    // 仅在目标对话是当前活跃对话时标记全局 thinking；
+    // 后台对话出队发送不污染活跃对话的 status（否则活跃对话的 send 会误判入队）
+    if (curId === activeIdRef.current) setStatusSynced('thinking');
     await window.claude.ask(text, useConfirm);
   }, []);
 
@@ -562,6 +563,11 @@ export function useClaude() {
     const ok = await window.claude.conv.switch(id);
     if (ok) {
       setActiveId(id);
+      // 确保 convs 中有该对话的槽位（防冷启动/新对话无条目导致 messages 取空）
+      setConvs((prev) => {
+        if (prev[id]) return prev;
+        return { ...prev, [id]: { messages: [] } };
+      });
       // 状态跟随目标对话：若它正在生成则 thinking，否则 idle
       setStatusSynced(streamingIds.current[id] ? 'thinking' : 'idle');
       setError('');
@@ -572,7 +578,6 @@ export function useClaude() {
           const history = await window.claude.loadHistory(conv.sessionId);
           loadedHistoryRef.current.add(id);
           setConvs((prev) => {
-            // 二次确认：若加载期间已有消息（流式生成了），则不覆盖
             if (prev[id] && prev[id].messages.length > 0) return prev;
             return { ...prev, [id]: { messages: history } };
           });
