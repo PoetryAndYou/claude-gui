@@ -275,6 +275,10 @@ export default function App() {
 
           {isEmpty ? (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 16px' }}>
+              <div style={{ marginBottom: 24, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                <div style={{ color: 'var(--accent)', opacity: 0.7 }}><Icon name="bolt" size={28} color="var(--accent)" /></div>
+                <div style={{ fontSize: 13, color: 'var(--text-fainter)', fontWeight: 500, letterSpacing: -0.2 }}>Claude GUI</div>
+              </div>
               <div style={{ width: '100%', maxWidth: 640, padding: '0 20px' }}>
                 {!workspacePicked && (
                   <div
