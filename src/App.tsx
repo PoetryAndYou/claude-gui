@@ -252,7 +252,7 @@ export default function App() {
           />
         )}
 
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg-app)', justifyContent: isEmpty ? 'center' : 'flex-start' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg-chat)', justifyContent: isEmpty ? 'center' : 'flex-start' }}>
           {error && (
             <div style={{
               padding: '8px 16px', background: 'var(--red-soft)', color: 'var(--red)',

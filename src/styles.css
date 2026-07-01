@@ -31,6 +31,8 @@
   --shadow: rgba(0,0,0,.35);
   /* Windows 无边框窗口外框颜色（inset box-shadow，深色主题用浅灰） */
   --win-frame: rgba(255,255,255,.25);
+  /* 对话区/侧栏分层：对话区略亮于侧栏，形成视觉层次 */
+  --bg-chat: #1e2128;
 }
 
 html.light {
@@ -63,6 +65,8 @@ html.light {
   --shadow: rgba(140,149,159,.2);
   /* Windows 无边框窗口外框颜色（inset box-shadow，浅色主题用深灰，边界清晰） */
   --win-frame: rgba(0,0,0,.35);
+  /* 对话区/侧栏分层：对话区略亮于侧栏，形成视觉层次 */
+  --bg-chat: #fafbfc;
 }
 
 html, body, #root {
