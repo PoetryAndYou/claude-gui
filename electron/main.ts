@@ -451,10 +451,14 @@ function killProcTree(proc: ChildProcess | null) {
 // 文本流式吐出定时器（模拟逐字效果，避免整段一次性蹦出）
 let streamTimers: NodeJS.Timeout[] = [];
 let streamMaxDelay = 0;  // 本轮最大的 chunk 延迟（用于估算何时吐完）
-function clearStreamTimers() {
+// 杂项定时器引用（getCommands 超时等），窗口关闭时统一清理避免 UV_HANDLE_CLOSING 崩溃
+let miscTimers: NodeJS.Timeout[] = [];
+function clearAllTimers() {
   for (const t of streamTimers) clearTimeout(t);
   streamTimers = [];
   streamMaxDelay = 0;
+  for (const t of miscTimers) clearTimeout(t);
+  miscTimers = [];
 }
 // 把一段文本分块、按节奏推给前端（模拟流式打字，每块 ~12 字符，间隔 ~16ms）
 function streamText(convId: string | null, text: string) {
@@ -544,7 +548,7 @@ function executeAsk(prompt: string, confirmEnabled: boolean, onDone?: () => void
     // phase: 'preview' = 第一轮(default 模式抓意图)，'execute' = 第二轮(acceptEdits 真跑)
     const runOnce = (useResume: boolean, phase: 'preview' | 'execute' = 'execute') => {
       syncWorkspace();  // 用当前对话的工作目录
-      clearStreamTimers();  // 清掉上一轮残留的吐字定时器
+      clearAllTimers();  // 清掉上一轮残留的吐字定时器
       const sid = currentSessionId();
       const model = currentModel();
       const mode = currentMode();
@@ -848,7 +852,7 @@ ipcMain.handle('claude:confirm-reject', () => {
 
 // 中断当前对话
 ipcMain.handle('claude:stop', () => {
-  clearStreamTimers();  // 停掉还没吐完的文字
+  clearAllTimers();  // 停掉还没吐完的文字
   killProcTree(currentProc);  // 杀进程树（Windows 下否则孤儿继续跑，前端终止无反应）
   currentProc = null;
   // 清空待确认状态（避免 stop 后还残留确认卡片）
@@ -1214,7 +1218,8 @@ ipcMain.handle('claude:get-commands', () => {
     };
     proc.stdout.on('data', collect);
     proc.on('close', () => finish({ commands: mergeCommands([]), skills: scanSkills(), agents: [] }));
-    setTimeout(() => { try { proc.kill(); } catch (_) {} finish({ commands: mergeCommands([]), skills: scanSkills(), agents: [] }); }, 8000);
+    const t = setTimeout(() => { try { proc.kill(); } catch (_) {} finish({ commands: mergeCommands([]), skills: scanSkills(), agents: [] }); }, 8000);
+    miscTimers.push(t);
   });
 });
 
@@ -1296,7 +1301,10 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
-  clearStreamTimers();
+  clearAllTimers();
   killProcTree(currentProc);
+  // 释放 askQueue 中所有未决 Promise（避免 libuv 句柄悬空导致 Windows UV_HANDLE_CLOSING 崩溃）
+  for (const item of askQueue) item.resolve();
+  askQueue = [];
   if (process.platform !== 'darwin') app.quit();
 });

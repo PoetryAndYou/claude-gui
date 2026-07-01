@@ -44,6 +44,13 @@ export function useClaude() {
     if (noticeTimer.current != null) window.clearTimeout(noticeTimer.current);
     noticeTimer.current = window.setTimeout(() => setNotice(''), 4000);
   }, []);
+  // 组件卸载时清理定时器/动画帧，避免 Windows UV_HANDLE_CLOSING 崩溃
+  useEffect(() => {
+    return () => {
+      if (noticeTimer.current != null) window.clearTimeout(noticeTimer.current);
+      if (flushRaf.current != null) cancelAnimationFrame(flushRaf.current);
+    };
+  }, []);
   const [commands, setCommands] = useState<ClaudeItems>(EMPTY_ITEMS);
   // 变更前确认开关（用户在输入框旁勾选）；开启后每次 send 走两轮：先 default 预览再确认执行
   const [confirmEnabled, setConfirmEnabled] = useState(false);
