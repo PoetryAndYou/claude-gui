@@ -162,7 +162,7 @@ export function ConversationList({
                   <span style={{ color: 'var(--text-faint)' }}>{isCollapsed ? '▶' : '▼'}</span>
                 </button>
               )}
-              {!isCollapsed && convs.map((c) => (
+              {!isCollapsed && <div style={{ paddingLeft: 12 }}>{convs.map((c) => (
                 <div
                   key={c.id}
                   onClick={() => !editingId && onSelect(c.id)}
@@ -196,7 +196,7 @@ export function ConversationList({
                     </>
                   )}
                 </div>
-              ))}
+              ))}</div>}
             </div>
           );
         })}
@@ -226,7 +226,7 @@ const searchInputStyle: React.CSSProperties = {
 };
 const groupLabelStyle: React.CSSProperties = {
   display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 6, width: '100%',
-  fontSize: 11, color: 'var(--text-faint)', textAlign: 'left',
+  fontSize: 13, color: 'var(--text-soft)', textAlign: 'left',
   padding: '10px 8px 5px', letterSpacing: 0.3, fontWeight: 600,
   background: 'transparent', border: 'none', cursor: 'pointer',
 };
