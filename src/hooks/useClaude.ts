@@ -54,9 +54,10 @@ export function useClaude() {
   const [commands, setCommands] = useState<ClaudeItems>(EMPTY_ITEMS);
   // 变更前确认开关（用户在输入框旁勾选）；开启后每次 send 走两轮：先 default 预览再确认执行
   const [confirmEnabled, setConfirmEnabled] = useState(false);
-  // 消息队列：思考中再发的消息入队，当前回复 done 后自动出队发送
-  const [queue, setQueue] = useState<string[]>([]);
-  const queueRef = useRef<string[]>([]);
+  // 消息队列：每个对话独立队列（key=convId, value=排队消息文本数组）
+  // 思考中再发的消息入队到所属对话，该对话回复 done 后自动出队发送
+  const [queue, setQueue] = useState<Record<string, string[]>>({});
+  const queueRef = useRef<Record<string, string[]>>({});
   const inited = useRef(false);
 
   // 每个对话独立的 streaming 状态（切换不打断）
@@ -68,6 +69,8 @@ export function useClaude() {
   useEffect(() => { activeIdRef.current = activeId; }, [activeId]);
   const convListRef = useRef(convList);
   useEffect(() => { convListRef.current = convList; }, [convList]);
+  // 跟踪已从文件加载过历史的对话 id，避免 switchConv 重复/误覆盖
+  const loadedHistoryRef = useRef<Set<string>>(new Set());
 
   // 用 requestAnimationFrame 节流：把一帧内到达的所有 chunk 合并成一次 setState，
   // 避免每个 delta(2~3字符)都触发一次 markdown 重渲染导致卡顿/整段蹦出
@@ -183,16 +186,17 @@ export function useClaude() {
         if (convId === activeIdRef.current) {
           setStatusSynced(s === 'done' ? 'idle' : 'error');
         }
-        // 消息队列：当前回复 done 后，立即出队下一条（仅成功时；error 不自动继续）
+        // 消息队列：当前对话 done 后，立即出队该对话的下一条（仅成功时；error 不自动继续）
         // 不延迟：done 时 claude 已结束，立即发下一条；doSend 内部 setStatusSynced('thinking') 保证串行
-        if (s === 'done' && queueRef.current.length > 0) {
-          const next = queueRef.current[0];
-          queueRef.current = queueRef.current.slice(1);
-          setQueue(queueRef.current);
-          // 目标对话 = 当前 done 的对话（保证队列在哪发的就在哪执行）
-          const targetConvId = convId;
-          if (next) {
-            doSend(next, targetConvId, confirmEnabledRef.current, false);
+        if (s === 'done') {
+          const q = queueRef.current[convId];
+          if (q && q.length > 0) {
+            const next = q[0];
+            queueRef.current = { ...queueRef.current, [convId]: q.slice(1) };
+            setQueue({ ...queueRef.current });
+            if (next) {
+              doSend(next, convId, confirmEnabledRef.current, false);
+            }
           }
         }
       } else if (s === 'awaiting-confirm') {
@@ -392,12 +396,13 @@ export function useClaude() {
         else if (routed.action === 'model') modelOpenerRef.current?.();
         return;
       }
-      // 思考中（含等待确认）：仅入队，不立即显示（保证消息和回答一一对应，顺序不打乱）
+      // 思考中（含等待确认）：入队到当前对话，保证消息和回答一一对应，顺序不打乱
       // 用 statusRef 同步判断，避免连发时读到旧 state 没入队；
       // main 进程也有串行闸门（askBusy），双保险
       if (statusRef.current === 'thinking') {
-        queueRef.current = [...queueRef.current, trimmed];
-        setQueue(queueRef.current);
+        const cid = activeId || '';
+        queueRef.current = { ...queueRef.current, [cid]: [...(queueRef.current[cid] || []), trimmed] };
+        setQueue({ ...queueRef.current });
         return;
       }
       // 若没有激活对话，先创建（首条消息作为标题），并把首条用户消息一起写入
@@ -486,32 +491,41 @@ export function useClaude() {
 
   const stop = useCallback(() => {
     window.claude.stop();
-    // 清空队列（用户主动中断，不再发送后续排队消息）
-    queueRef.current = [];
-    setQueue([]);
+    // 清空所有对话队列（用户主动中断）
+    queueRef.current = {};
+    setQueue({});
   }, []);
 
-  // 清空消息队列（清空待发）
+  // 当前对话的排队消息列表（供 UI 展示）
+  const currentQueue = activeId ? (queue[activeId] || []) : [];
+
+  // 清空当前对话的消息队列
   const clearQueue = useCallback(() => {
-    queueRef.current = [];
-    setQueue(queueRef.current);
-  }, []);
+    if (!activeId) return;
+    queueRef.current = { ...queueRef.current, [activeId]: [] };
+    setQueue({ ...queueRef.current });
+  }, [activeId]);
 
-  // 删除队列中指定项
+  // 删除当前对话队列中指定项
   const removeQueueItem = useCallback((index: number) => {
-    queueRef.current = queueRef.current.filter((_, i) => i !== index);
-    setQueue(queueRef.current);
-  }, []);
+    if (!activeId) return;
+    const q = [...(queueRef.current[activeId] || [])];
+    q.splice(index, 1);
+    queueRef.current = { ...queueRef.current, [activeId]: q };
+    setQueue({ ...queueRef.current });
+  }, [activeId]);
 
-  // 队列项移到队首（下一条执行它）。队列存在时一定在 thinking，不能立即抢断当前回复
+  // 当前对话队列项移到队首（下一条执行它）
   const runQueueItemNow = useCallback((index: number) => {
-    const item = queueRef.current[index];
+    if (!activeId) return;
+    const q = [...(queueRef.current[activeId] || [])];
+    const item = q[index];
     if (item == null) return;
-    // 移除原位置，插到队首
-    const rest = queueRef.current.filter((_, i) => i !== index);
-    queueRef.current = [item, ...rest];
-    setQueue(queueRef.current);
-  }, []);
+    q.splice(index, 1);
+    q.unshift(item);
+    queueRef.current = { ...queueRef.current, [activeId]: q };
+    setQueue({ ...queueRef.current });
+  }, [activeId]);
 
   // 变更确认：用户点「执行」→ 第二轮 acceptEdits 重跑；点「拒绝」→ 清掉确认卡片
   const confirmApprove = useCallback(async () => {
@@ -539,6 +553,7 @@ export function useClaude() {
     setConvList(conversations);
     setActiveId(id);
     setConvs((prev) => ({ ...prev, [id]: { messages: [] } }));
+    loadedHistoryRef.current.add(id);  // 新对话无历史，无需加载
     setStatus('idle');
     setError('');
   }, []);
@@ -550,12 +565,19 @@ export function useClaude() {
       // 状态跟随目标对话：若它正在生成则 thinking，否则 idle
       setStatusSynced(streamingIds.current[id] ? 'thinking' : 'idle');
       setError('');
-      // 从 claude session 恢复历史消息（仅在还没加载过时）
-      if (!convs[id] || convs[id].messages.length === 0) {
+      // 从 claude session 恢复历史消息（仅首次切换且未在生成中）
+      if (!loadedHistoryRef.current.has(id) && !streamingIds.current[id]) {
         const conv = convListRef.current.find((c) => c.id === id);
         if (conv?.sessionId) {
           const history = await window.claude.loadHistory(conv.sessionId);
-          setConvs((prev) => ({ ...prev, [id]: { messages: history } }));
+          loadedHistoryRef.current.add(id);
+          setConvs((prev) => {
+            // 二次确认：若加载期间已有消息（流式生成了），则不覆盖
+            if (prev[id] && prev[id].messages.length > 0) return prev;
+            return { ...prev, [id]: { messages: history } };
+          });
+        } else {
+          loadedHistoryRef.current.add(id);
         }
       }
     }
@@ -603,7 +625,7 @@ export function useClaude() {
     // 变更前确认
     confirmEnabled, setConfirmEnabled,
     confirmApprove, confirmReject,
-    // 消息队列
-    queue, clearQueue, removeQueueItem, runQueueItemNow,
+    // 消息队列（当前对话）
+    queue: currentQueue, clearQueue, removeQueueItem, runQueueItemNow,
   };
 }
