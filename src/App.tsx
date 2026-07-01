@@ -288,7 +288,7 @@ export default function App() {
                 </div>
               </div>
 
-              <div style={{ width: '100%', maxWidth: 720 }}>
+              <div style={{ width: '100%', maxWidth: 680 }}>
                 {/* 工作空间选择：独立卡片，圆角 */}
                 <div style={{
                   display: 'flex', alignItems: 'center', gap: 10,
