@@ -21,6 +21,7 @@
   --purple: #d2a8ff;
   --green: #7ee787;
   --red: #ff9382;
+  --blue: #6cb6ff;
   --red-soft: rgba(248,81,73,.12);
   --red-border: rgba(248,81,73,.25);
   --red-border-strong: rgba(248,81,73,.45);
@@ -35,8 +36,9 @@ html.light {
   --bg-elev: #f6f8fa;
   --bg-elev-2: #eaeef2;
   --bg-input: #f6f8fa;
-  --border: #d0d7de;
-  --border-soft: #e1e4e8;
+  /* 浅色主题下分隔线/外框需更明显（白底上原值几乎不可见），加深一档但保持柔和 */
+  --border: #c8d0d8;
+  --border-soft: #d3d8de;
   --text: #1f2328;
   --text-soft: #24292f;
   --text-muted: #57606a;
@@ -49,6 +51,7 @@ html.light {
   --purple: #6f42c1;
   --green: #1a7f37;
   --red: #cf222e;
+  --blue: #0969da;
   --red-soft: rgba(207,34,46,.1);
   --red-border: rgba(207,34,46,.25);
   --red-border-strong: rgba(207,34,46,.45);

@@ -8,9 +8,17 @@ import { contextBridge, ipcRenderer } from 'electron';
 // - onStatus: 订阅状态变化（thinking/done/error）
 // - onError: 订阅错误
 export interface ClaudeItems {
-  commands: string[];
+  commands: AliasCmdItem[];
   skills: { name: string; description?: string }[];
   agents: string[];
+}
+
+// 命令项（结构化）：区分项目命令 / 内置命令，内置命令可带 GUI 接管动作
+export interface AliasCmdItem {
+  name: string;
+  description?: string;
+  builtin?: boolean;                     // true = claude 内置/原生命令
+  action?: 'clear' | 'model' | 'cost';   // 非空 = GUI 端接管（不透传给 claude）
 }
 
 export interface Usage {
@@ -97,6 +105,8 @@ export interface ClaudeAPI {
   setMode: (mode: string | null) => Promise<string>;
   // 命令/技能/代理
   getCommands: () => Promise<ClaudeItems>;
+  builtinCommands: () => Promise<AliasCmdItem[]>;
+  clearContext: () => Promise<boolean>;   // /clear 接管：清除当前对话 claude session
   getSkills: () => Promise<{ name: string; description?: string }[]>;
   // skill 完整内容（二级弹窗用）
   getSkillDetail: (skillPath: string) => Promise<{ content: string; error?: string }>;
@@ -152,6 +162,8 @@ contextBridge.exposeInMainWorld('claude', {
   getMode: () => ipcRenderer.invoke('claude:get-mode'),
   setMode: (mode: string | null) => ipcRenderer.invoke('claude:set-mode', mode),
   getCommands: () => ipcRenderer.invoke('claude:get-commands'),
+  builtinCommands: () => ipcRenderer.invoke('claude:builtin-commands'),
+  clearContext: () => ipcRenderer.invoke('claude:clear-context'),
   getSkills: () => ipcRenderer.invoke('claude:get-skills'),
   getSkillDetail: (skillPath: string) => ipcRenderer.invoke('claude:skill-detail', skillPath),
   listFiles: (query: string, subdir?: string) => ipcRenderer.invoke('claude:list-files', query, subdir),

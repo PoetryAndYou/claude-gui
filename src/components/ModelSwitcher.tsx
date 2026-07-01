@@ -3,10 +3,25 @@ import type { ModelItem } from '../../electron/preload';
 import { Icon } from './Icon';
 
 // 顶栏模型切换：每个对话独立模型，下拉选择 sonnet/opus/haiku/默认
-export function ModelSwitcher({ convId }: { convId: string | null }) {
+// 可受控：传入 controlledOpen/setControlledOpen 时，由外部（如 /model 命令）决定展开
+export function ModelSwitcher({
+  convId,
+  controlledOpen,
+  setControlledOpen,
+}: {
+  convId: string | null;
+  controlledOpen?: boolean;
+  setControlledOpen?: (open: boolean) => void;
+}) {
   const [models, setModels] = useState<ModelItem[]>([]);
   const [current, setCurrent] = useState<string | null>(null);
-  const [open, setOpen] = useState(false);
+  const [selfOpen, setSelfOpen] = useState(false);
+  // 受控优先，否则用内部 state（/model 命令走外部触发路径）
+  const open = controlledOpen !== undefined ? controlledOpen : selfOpen;
+  const setOpen = (v: boolean) => {
+    if (setControlledOpen) setControlledOpen(v);
+    setSelfOpen(v);
+  };
   const ref = useRef<HTMLDivElement>(null);
 
   // 对话切换时重新读取模型
@@ -23,7 +38,7 @@ export function ModelSwitcher({ convId }: { convId: string | null }) {
     };
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
-  }, [open]);
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pick = async (alias: string | null) => {
     const next = await window.claude.setModel(alias);
@@ -38,7 +53,7 @@ export function ModelSwitcher({ convId }: { convId: string | null }) {
   return (
     <div ref={ref} style={{ position: 'relative' }}>
       <button
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => setOpen(!open)}
         title="切换模型"
         className="no-drag"
         style={{

@@ -22,11 +22,12 @@ const winBtnStyle: React.CSSProperties = {
 
 export default function App() {
   const {
-    messages, status, error, commands,
+    messages, status, error, notice, commands,
     convList, activeId,
     send, stop, newChat, switchConv, deleteConv, renameConv, loadCommands,
     regenerate, editAndResend,
     importConvs,
+    setModelOpener,
     confirmEnabled, setConfirmEnabled,
     confirmApprove, confirmReject,
     queue, clearQueue, removeQueueItem, runQueueItemNow,
@@ -51,6 +52,13 @@ export default function App() {
 
   // 侧边栏折叠
   const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  // /model 命令接管：受控打开顶栏模型选择器
+  const [modelPopoverOpen, setModelPopoverOpen] = useState(false);
+  useEffect(() => {
+    // 把 /model 的开启动作注入 hook（用 ref，避免闭包过期）
+    setModelOpener(() => setModelPopoverOpen(true));
+  }, [setModelOpener]);
 
   // ⌘P 命令面板
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -132,7 +140,12 @@ export default function App() {
   const isMac = navigator.platform.toLowerCase().includes('mac');
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: isMac ? 'transparent' : 'var(--bg-app)' }}>
+    <div style={{
+      height: '100%', display: 'flex', flexDirection: 'column',
+      background: isMac ? 'transparent' : 'var(--bg-app)',
+      // Windows/Linux 无边框窗口：最外层加细边框 + 微 inset 阴影，让浅色主题下窗口边界清晰可见
+      ...(isMac ? {} : { boxShadow: 'inset 0 0 0 1px var(--border)' }),
+    }}>
       {/* 顶部标题栏 */}
       <header style={{
         height: 40, flex: '0 0 auto',
@@ -172,7 +185,11 @@ export default function App() {
             <Icon name="search" size={13} color="var(--text-faint)" />
             <span>{isMac ? '⌘P' : 'Ctrl+P'}</span>
           </button>
-          <ModelSwitcher convId={activeId} />
+          <ModelSwitcher
+            convId={activeId}
+            controlledOpen={modelPopoverOpen}
+            setControlledOpen={setModelPopoverOpen}
+          />
           <ModeSwitcher convId={activeId} />
           <button
             onClick={toggleTheme}
@@ -242,6 +259,15 @@ export default function App() {
               fontSize: 12, borderBottom: '1px solid var(--red-border)', whiteSpace: 'pre-wrap',
             }}>
               ⚠️ {error}
+            </div>
+          )}
+          {notice && (
+            <div style={{
+              padding: '8px 16px', background: 'var(--green)', color: '#fff',
+              fontSize: 12, borderBottom: '1px solid rgba(0,0,0,.12)', whiteSpace: 'pre-wrap',
+              opacity: 0.92,
+            }}>
+              ✅ {notice}
             </div>
           )}
 

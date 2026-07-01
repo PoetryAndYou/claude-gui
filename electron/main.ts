@@ -274,6 +274,41 @@ const MODES: { alias: string; name: string; desc: string }[] = [
   { alias: 'bypassPermissions', name: '全自动', desc: '放行一切·含命令' },
 ];
 
+// ──────────────────────────────────────────────
+// 内置/原生命令：新版 claude init 事件不再暴露这些，需 GUI 侧补全。
+// action 字段空 = 仅展示/按字面 ask 发送（-p 下可能不生效，但至少出现在补全里供用户用）；
+// action 非空 = GUI 接管（前端拦截、不透传给 claude，执行真实动作）。
+// ──────────────────────────────────────────────
+interface BuiltinCmd {
+  name: string;       // 不含前导 /
+  desc?: string;
+  action?: 'clear' | 'model' | 'cost';   // 非空 = GUI 接管
+}
+const BUILTIN_COMMANDS: BuiltinCmd[] = [
+  // GUI 接管（有真实 GUI 动作，或前端处理后再决定是否走 claude）
+  { name: 'clear',  desc: '清空上下文（重置 session，开始新会话）', action: 'clear' },
+  { name: 'model',  desc: '选择 LLM 模型（弹出模型选择器）',        action: 'model' },
+  { name: 'cost',   desc: '统计当前对话的 token 用量与费用',         action: 'cost' },
+  // 仅展示 / 按字面发送（headless 下多数不生效，但补全里可见，方便用户熟悉）
+  { name: 'compact',          desc: '压缩上下文（保留摘要继续会话）' },
+  { name: 'resume',           desc: '恢复指定会话' },
+  { name: 'review',           desc: '请求代码审查' },
+  { name: 'agents',           desc: '管理子代理' },
+  { name: 'memory',           desc: '编辑 CLAUDE.md 记忆文件' },
+  { name: 'config',           desc: '查看/编辑配置' },
+  { name: 'mcp',              desc: '管理 MCP 服务器' },
+  { name: 'add-dir',          desc: '添加工作目录' },
+  { name: 'init',             desc: '初始化项目 CLAUDE.md' },
+  { name: 'login',            desc: '登录 Anthropic 账户' },
+  { name: 'logout',           desc: '退出登录' },
+  { name: 'status',           desc: '查看账户与连接状态' },
+  { name: 'doctor',           desc: '诊断 claude 安装/环境问题' },
+  { name: 'bug',              desc: '提交 bug 报告' },
+  { name: 'release-notes',    desc: '查看版本更新日志' },
+  { name: 'vim',              desc: '切换 vim 输入模式' },
+  { name: 'terminal-setup',   desc: '安装 Shift+Enter 终端键绑定' },
+];
+
 // 当前激活对话的工作目录（spawn/listFiles 等都用它）
 function currentWorkspace(): string {
   const c = conversations.find((c) => c.id === activeConvId);
@@ -987,8 +1022,15 @@ export interface CmdItem {
   description?: string;
   path?: string;   // SKILL.md 绝对路径（二级弹窗按需读完整内容用）
 }
+// 命令项（结构化）：支持区分项目命令 / 内置命令，以及内置命令的 GUI 接管动作
+export interface AliasCmdItem {
+  name: string;
+  description?: string;
+  builtin?: boolean;                  // true = claude 内置/原生命令（非项目自定义）
+  action?: 'clear' | 'model' | 'cost';  // 非空 = GUI 端接管（不透传给 claude）
+}
 export interface ClaudeItems {
-  commands: string[];
+  commands: AliasCmdItem[];
   skills: CmdItem[];
   agents: string[];
 }
@@ -1154,10 +1196,14 @@ ipcMain.handle('claude:get-commands', () => {
           const obj = JSON.parse(line.trim());
           if (obj.type === 'system' && obj.subtype === 'init') {
             try { proc.kill(); } catch (_) {}
+            // 项目自定义命令（init 事件里是 string[]），转成结构化项（builtin=false）
+            const proj: AliasCmdItem[] = (Array.isArray(obj.slash_commands) ? obj.slash_commands : [])
+              .filter((s: unknown): s is string => typeof s === 'string' && !!s)
+              .map((s: string) => ({ name: s, builtin: false }));
             // skill 不用 init 的 skills 数组（那只是 claude 内置命令，无描述），
             // 改为直接用 SKILL.md 扫描结果（真正的插件/项目 skill，带描述）
             finish({
-              commands: Array.isArray(obj.slash_commands) ? obj.slash_commands : [],
+              commands: mergeCommands(proj),
               skills: scanSkills(),
               agents: Array.isArray(obj.agents) ? obj.agents : [],
             });
@@ -1167,9 +1213,40 @@ ipcMain.handle('claude:get-commands', () => {
       }
     };
     proc.stdout.on('data', collect);
-    proc.on('close', () => finish({ commands: [], skills: scanSkills(), agents: [] }));
-    setTimeout(() => { try { proc.kill(); } catch (_) {} finish({ commands: [], skills: scanSkills(), agents: [] }); }, 8000);
+    proc.on('close', () => finish({ commands: mergeCommands([]), skills: scanSkills(), agents: [] }));
+    setTimeout(() => { try { proc.kill(); } catch (_) {} finish({ commands: mergeCommands([]), skills: scanSkills(), agents: [] }); }, 8000);
   });
+});
+
+// 把项目命令和内置命令合并、去重（同名时项目命令优先），内置命令补全进补全菜单/
+// ⌘P 面板，便于用户发现 /clear /model /cost 等原生 slash 命令（新版 claude init 不再返回这些）
+function mergeCommands(projectCmds: AliasCmdItem[]): AliasCmdItem[] {
+  const seen = new Set<string>();
+  const out: AliasCmdItem[] = [];
+  for (const c of projectCmds) {
+    if (seen.has(c.name)) continue;
+    seen.add(c.name);
+    out.push(c);
+  }
+  for (const b of BUILTIN_COMMANDS) {
+    if (seen.has(b.name)) continue;   // 项目已自定义同名命令则不覆盖
+    seen.add(b.name);
+    out.push({ name: b.name, description: b.desc, builtin: true, action: b.action });
+  }
+  return out;
+}
+
+// 暴露内置命令清单（前端拉取后合入补全/⌘P；与 get-commands 解耦，便于清晰区分）
+ipcMain.handle('claude:builtin-commands', () =>
+  BUILTIN_COMMANDS.map((b) => ({ name: b.name, description: b.desc, builtin: true, action: b.action }))
+);
+
+// /clear 接管：清除当前激活对话的 claude session（下次发送从全新 session 开始），
+// 不动本地消息（保留可见历史，最接近交互式 /clear 语义）
+ipcMain.handle('claude:clear-context', () => {
+  const c = conversations.find((cc) => cc.id === activeConvId);
+  if (c) { c.sessionId = null; saveConversations(); }
+  return !!c;
 });
 
 // 单独把扫描逻辑抽出来：扫所有 SKILL.md，返回 {name, description}[] 作为 skill 来源

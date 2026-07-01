@@ -74,12 +74,13 @@ export function CommandPalette({
         keywords: c.title, run: () => { onSwitchConv(c.id); onClose(); },
       });
     });
-    // 命令
+    // 命令（含内置命令）
     commands.commands.forEach((c) => {
       acts.push({
-        id: 'cmd:' + c, label: '/' + c, hint: '命令', group: '命令',
-        icon: 'command', iconColor: 'var(--accent)',
-        keywords: c, run: () => { onPickCommand('/' + c); onClose(); },
+        id: 'cmd:' + c.name, label: '/' + c.name, hint: c.builtin ? '内置' : '命令', group: '命令',
+        icon: 'command', iconColor: c.builtin ? 'var(--blue)' : 'var(--accent)',
+        keywords: c.name + ' ' + (c.description || ''),
+        run: () => { onPickCommand('/' + c.name); onClose(); },
       });
     });
     // 技能

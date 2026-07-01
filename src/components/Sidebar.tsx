@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import type { ClaudeItems, Conversation } from '../../electron/preload';
+import type { ClaudeItems, Conversation, AliasCmdItem } from '../../electron/preload';
 import type { Theme } from '../hooks/useClaude';
 import { ConversationList } from './ConversationList';
 import { Icon } from './Icon';
@@ -88,7 +88,7 @@ export function Sidebar({
   return (
     <div style={{
       width: 232, flex: '0 0 auto',
-      borderRight: '1px solid rgba(128,128,128,.2)',
+      borderRight: '1px solid var(--border-soft)',
       // mac：透明透毛玻璃；Windows/Linux：实色跟随主题（无毛玻璃可透，否则黑底深字看不见）
       background: isMac ? 'transparent' : (isLight ? '#ffffff' : 'var(--bg-app)'),
       padding: '12px 10px 10px',
@@ -112,7 +112,7 @@ export function Sidebar({
 
       {/* 次要工具：工作空间 + 命令/技能/代理。沉到底部，用细分隔线与对话区隔开。
           flex:0 0 auto 保证不被压缩；命令列表内部 maxHeight+滚动，多命令不挤压上方对话区 */}
-      <div style={{ marginTop: 8, paddingTop: 10, borderTop: '1px solid rgba(128,128,128,.18)', display: 'flex', flexDirection: 'column', gap: 8, flex: '0 0 auto' }}>
+      <div style={{ marginTop: 8, paddingTop: 10, borderTop: '1px solid var(--border-soft)', display: 'flex', flexDirection: 'column', gap: 8, flex: '0 0 auto' }}>
         <button onClick={pickDir} title={workspace} style={{ ...footerBtnStyle, display: 'flex', alignItems: 'center', gap: 7 }}>
           <Icon name="folder" size={14} color="var(--text-muted)" />
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{shortPath.length > 22 ? '…' + shortPath.slice(-21) : shortPath || '选择工作空间'}</span>
@@ -148,7 +148,15 @@ export function Sidebar({
               collapsed={collapsed.commands}
               onToggle={() => toggle('commands')}
               renderItem={(c) => (
-                <button key={c} onClick={() => onPickCommand('/' + c)} style={itemStyle}>/{c}</button>
+                <button
+                  key={c.name}
+                  onClick={() => onPickCommand('/' + c.name)}
+                  style={itemStyle}
+                  title={c.description}
+                >
+                  {c.builtin && <span style={builtinTagStyle}>内置</span>}
+                  <span>/{c.name}</span>
+                </button>
               )}
               items={items.commands}
             />
@@ -232,6 +240,12 @@ const groupHeaderStyle: React.CSSProperties = {
   width: '100%', textAlign: 'left',
   background: 'transparent', border: 'none', color: 'var(--text-muted)',
   padding: '6px 4px', fontSize: 12, fontWeight: 500, cursor: 'pointer',
+};
+// 内置命令项的「内置」小标（区别于项目自定义命令）
+const builtinTagStyle: React.CSSProperties = {
+  display: 'inline-block', fontSize: 9, padding: '0 3px', marginRight: 4,
+  borderRadius: 3, lineHeight: '14px', fontWeight: 600,
+  background: 'rgba(56,132,255,.18)', color: 'var(--blue)',
 };
 const itemStyle: React.CSSProperties = {
   display: 'block', textAlign: 'left', background: 'transparent', border: 'none',

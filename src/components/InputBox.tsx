@@ -1,8 +1,13 @@
 import { useState, useRef, useEffect, useMemo, type KeyboardEvent } from 'react';
-import type { ClaudeItems } from '../../electron/preload';
+import type { ClaudeItems, AliasCmdItem } from '../../electron/preload';
 import { Icon } from './Icon';
 
-interface CmdEntry { cmd: string; desc?: string; kind: '命令' | '技能' | '代理'; }
+interface CmdEntry {
+  cmd: string;
+  desc?: string;
+  kind: '命令' | '内置' | '技能' | '代理';
+  builtin?: boolean;
+}
 interface FileEntry { name: string; path: string; isDir: boolean; }
 
 export function InputBox({
@@ -66,13 +71,13 @@ export function InputBox({
   const allCmds = useMemo<CmdEntry[]>(() => {
     const list: CmdEntry[] = [];
     const seen = new Set<string>();
-    const add = (name: string, desc: string | undefined, kind: CmdEntry['kind']) => {
+    const add = (name: string, desc: string | undefined, kind: CmdEntry['kind'], builtin = false) => {
       const cmd = '/' + name;
       if (seen.has(cmd)) return;
       seen.add(cmd);
-      list.push({ cmd, desc, kind });
+      list.push({ cmd, desc, kind, builtin });
     };
-    commands.commands.forEach((c) => add(c, undefined, '命令'));
+    commands.commands.forEach((c: AliasCmdItem) => add(c.name, c.description, c.builtin ? '内置' : '命令', !!c.builtin));
     commands.skills.forEach((s) => add(s.name, s.description, '技能'));
     commands.agents.forEach((c) => add(c, undefined, '代理'));
     return list;
@@ -500,7 +505,7 @@ function SlashMenu({ items, idx, onPick, onHover }: {
 }
 
 function kindBadge(kind: string): React.CSSProperties {
-  const map: Record<string, string> = { '技能': 'var(--purple)', '代理': 'var(--green)', '命令': 'var(--accent)' };
+  const map: Record<string, string> = { '技能': 'var(--purple)', '代理': 'var(--green)', '命令': 'var(--accent)', '内置': 'var(--blue)' };
   const c = map[kind] || 'var(--accent)';
   return {
     fontSize: 10, padding: '1px 5px', borderRadius: 3, fontWeight: 600,

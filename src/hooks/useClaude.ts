@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Conversation, ClaudeItems, Usage, ToolEvent, PendingChange } from '../../electron/preload';
+import { routeNativeCommand } from '../lib/nativeCommands';
 
 export interface Message {
   id: string;
@@ -35,6 +36,14 @@ export function useClaude() {
   const statusRef = useRef<ChatStatus>('idle');
   const setStatusSynced = (s: ChatStatus) => { statusRef.current = s; setStatus(s); };
   const [error, setError] = useState<string>('');
+  // 绿色提示（如 /clear 成功）：与 error 并列，4s 自动清除
+  const [notice, setNotice] = useState<string>('');
+  const noticeTimer = useRef<number | null>(null);
+  const showNotice = useCallback((msg: string) => {
+    setNotice(msg);
+    if (noticeTimer.current != null) window.clearTimeout(noticeTimer.current);
+    noticeTimer.current = window.setTimeout(() => setNotice(''), 4000);
+  }, []);
   const [commands, setCommands] = useState<ClaudeItems>(EMPTY_ITEMS);
   // 变更前确认开关（用户在输入框旁勾选）；开启后每次 send 走两轮：先 default 预览再确认执行
   const [confirmEnabled, setConfirmEnabled] = useState(false);
@@ -320,11 +329,62 @@ export function useClaude() {
     await window.claude.ask(text, useConfirm);
   }, []);
 
+  // /model 接管：由 App 注入（打开模型选择器）。用 ref 避免闭包过期
+  const modelOpenerRef = useRef<(() => void) | null>(null);
+  const setModelOpener = useCallback((fn: (() => void) | null) => { modelOpenerRef.current = fn; }, []);
+
+  // /cost 接管：汇总当前对话所有助手消息的 usage，插入一条本地汇总消息（不开 claude 进程）
+  const showCostSummary = useCallback(() => {
+    if (!activeId) { showNotice('当前没有活动对话'); return; }
+    const conv = convs[activeId];
+    const msgs = conv?.messages ?? [];
+    let inputTokens = 0, outputTokens = 0, durationMs = 0, totalCostUsd = 0, count = 0;
+    for (const m of msgs) {
+      if (m.role !== 'assistant' || !m.usage) continue;
+      inputTokens += m.usage.inputTokens || 0;
+      outputTokens += m.usage.outputTokens || 0;
+      durationMs += m.usage.durationMs || 0;
+      totalCostUsd += m.usage.totalCostUsd || 0;
+      count += 1;
+    }
+    if (count === 0) { showNotice('当前对话还没有可统计的用量'); return; }
+    const usage: Usage = { inputTokens, outputTokens, durationMs, totalCostUsd };
+    const summary = `**本对话用量汇总**（${count} 条助手回复）\n\n` +
+      `- 输入 token：${inputTokens.toLocaleString()}\n` +
+      `- 输出 token：${outputTokens.toLocaleString()}\n` +
+      `- 合计 token：${(inputTokens + outputTokens).toLocaleString()}\n` +
+      `- 累计耗时：${(durationMs / 1000).toFixed(1)}s\n` +
+      `- 累计费用：$${totalCostUsd.toFixed(4)}`;
+    setConvs((prev) => {
+      const c = prev[activeId];
+      if (!c) return prev;
+      return { ...prev, [activeId]: { messages: [...c.messages, {
+        id: `a-cost-${Date.now()}`, role: 'assistant', content: summary, usage,
+      }] } };
+    });
+    showNotice('已生成本对话用量汇总');
+  }, [activeId, convs, showNotice]);
+
+  // /clear 接管：清除当前对话的 claude session（下次发送开新 session），保留本地可见历史
+  const clearContextLocal = useCallback(async () => {
+    if (!activeId) { showNotice('当前没有活动对话'); return; }
+    await window.claude.clearContext();
+    showNotice('已重置上下文，下一条消息将开启新 session');
+  }, [activeId, showNotice]);
+
   const send = useCallback(
     async (text: string) => {
       const trimmed = text.trim();
       if (!trimmed) return;
       setError('');
+      // 原生命令路由：/clear /model /cost 由 GUI 接管，不透传给 claude
+      const routed = routeNativeCommand(trimmed);
+      if (routed.intercepted) {
+        if (routed.action === 'clear') await clearContextLocal();
+        else if (routed.action === 'cost') showCostSummary();
+        else if (routed.action === 'model') modelOpenerRef.current?.();
+        return;
+      }
       // 思考中（含等待确认）：仅入队，不立即显示（保证消息和回答一一对应，顺序不打乱）
       // 用 statusRef 同步判断，避免连发时读到旧 state 没入队；
       // main 进程也有串行闸门（askBusy），双保险
@@ -525,12 +585,14 @@ export function useClaude() {
   }, []);
 
   return {
-    messages, status, error, commands,
+    messages, status, error, notice, commands,
     convList, activeId,
     send, stop, newChat, switchConv, deleteConv, renameConv, loadCommands,
     regenerate, editAndResend,
     importConvs,
     fireAsk,
+    // 原生命令接管
+    setModelOpener, clearContextLocal, showCostSummary,
     // 变更前确认
     confirmEnabled, setConfirmEnabled,
     confirmApprove, confirmReject,
