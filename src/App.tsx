@@ -274,39 +274,35 @@ export default function App() {
           )}
 
           {isEmpty ? (
-            /* 空态：紧凑居中，工作空间栏与输入框拼接为整体卡片 */
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 16px' }}>
-              <div style={{ width: '100%', maxWidth: 600, borderRadius: 20, overflow: 'hidden', boxShadow: '0 8px 32px var(--shadow), 0 2px 8px var(--shadow)' }}>
-                {/* 工作空间栏：贴顶，下无边框 */}
+              <div style={{ width: '100%', maxWidth: 640 }}>
                 {!workspacePicked && (
-                  <button
+                  <div
                     onClick={pickDirectory}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 8,
-                      padding: '7px 16px', width: '100%',
-                      background: 'var(--bg-elev)', border: 'none', borderBottom: '1px solid var(--border)',
-                      cursor: 'pointer', fontFamily: 'inherit',
+                      padding: '6px 14px', marginBottom: 8, borderRadius: 10,
+                      background: 'var(--bg-elev)', border: '1px solid var(--border)',
+                      cursor: 'pointer',
                     }}
                   >
-                    <Icon name="folder" size={14} color="var(--text-faint)" />
-                    <span style={{ fontSize: 12.5, color: 'var(--text-faint)' }}>选择工作空间…</span>
-                    <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--text-fainter)' }}>浏览文件夹</span>
-                  </button>
+                    <Icon name="folder" size={14} color="var(--text-muted)" />
+                    <span style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>选择工作空间…</span>
+                  </div>
                 )}
                 {workspacePicked && (
                   <div style={{
                     display: 'flex', alignItems: 'center', gap: 6,
-                    padding: '5px 16px', width: '100%',
-                    background: 'var(--accent-soft)', borderBottom: '1px solid var(--border)',
+                    padding: '4px 12px', marginBottom: 8, borderRadius: 8,
+                    background: 'var(--bg-elev)', border: '1px solid var(--border)',
                   }}>
                     <Icon name="folder" size={12} color="var(--accent)" />
                     <span style={{ fontSize: 11.5, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }} title={workspace}>
                       {workspace.replace(/^\/Users\/[^/]+/, '~')}
                     </span>
-                    <button onClick={pickDirectory} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-faint)', fontSize: 10, fontFamily: 'inherit', padding: '1px 4px' }}>更换</button>
+                    <button onClick={(e) => { e.stopPropagation(); pickDirectory(); }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-faint)', fontSize: 10, fontFamily: 'inherit' }}>更换</button>
                   </div>
                 )}
-
                 <InputBox
                   onSend={send}
                   onStop={stop}
@@ -321,7 +317,6 @@ export default function App() {
                   queueCount={queue.length}
                   onClearQueue={clearQueue}
                   centered
-                  flatTop
                 />
               </div>
             </div>
