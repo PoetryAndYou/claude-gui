@@ -879,9 +879,7 @@ ipcMain.handle('conv:create', (_e, firstMessage?: string) => {
     title: firstMessage ? makeTitle(firstMessage) : '新对话',
     sessionId: null,
     workspace: inheritedWs,
-    // 新对话一律视为「未选过工作空间」：空态时渲染居中主页，
-    // 用户可在该对话内重新选空间，或直接发消息（有消息后 isEmpty=false 自动切常规）
-    workspacePicked: false,
+    workspacePicked: true,   // 继承当前工作空间，默认已选
     model: inheritedModel,
     mode: inheritedMode,
     createdAt: Date.now(),
@@ -1009,7 +1007,7 @@ ipcMain.handle('claude:new-chat', () => {
     title: '新对话',
     sessionId: null,
     workspace: inheritedWs,
-    workspacePicked: false,   // 新对话视为未选过空间：空态渲染居中主页
+    workspacePicked: true,   // 继承当前工作空间，默认已选
     model: inheritedModel,
     mode: inheritedMode,
     createdAt: Date.now(),
