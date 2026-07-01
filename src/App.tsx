@@ -274,84 +274,57 @@ export default function App() {
           )}
 
           {isEmpty ? (
-            /* 空态居中：引导 + 工作空间选择 + 输入框（发送首条消息后切常规布局） */
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '0 16px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                <div style={{ color: 'var(--accent)', opacity: 0.8 }}><Icon name="bolt" size={32} color="var(--accent)" /></div>
-                <div style={{ fontSize: 16, color: 'var(--text-muted)', fontWeight: 500, letterSpacing: -0.3 }}>Claude GUI</div>
-              </div>
-
-              <div style={{ width: '100%', maxWidth: 920, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {/* 工作空间选择 */}
+            /* 空态：紧凑居中，输入框为视觉焦点 */
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 16px' }}>
+              <div style={{ width: '100%', maxWidth: 740 }}>
+                {/* 工作空间：内嵌于输入区上方，视觉一体 */}
                 {!workspacePicked && (
                   <button
                     onClick={pickDirectory}
                     style={{
-                      display: 'flex', alignItems: 'center', gap: 10,
-                      padding: '8px 16px', borderRadius: 10,
-                      background: 'var(--bg-elev)',
-                      border: '1px dashed var(--border)',
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      padding: '6px 14px', marginBottom: -1, borderRadius: '16px 16px 0 0',
+                      background: 'var(--bg-elev)', border: '1px solid var(--border)', borderBottom: 'none',
                       cursor: 'pointer', width: '100%',
-                      transition: 'border-color .15s, background .15s',
                       fontFamily: 'inherit',
                     }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = 'var(--accent)';
-                      e.currentTarget.style.background = 'var(--accent-soft)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.borderColor = 'var(--border)';
-                      e.currentTarget.style.background = 'var(--bg-elev)';
-                    }}
                   >
-                    <Icon name="folder" size={16} color="var(--text-faint)" />
-                    <span style={{ flex: 1, textAlign: 'left', fontSize: 13, color: 'var(--text-faint)' }}>
-                      选择工作空间…
-                    </span>
-                    <span style={{ fontSize: 11, color: 'var(--text-fainter)' }}>点击浏览文件夹</span>
+                    <Icon name="folder" size={14} color="var(--text-faint)" />
+                    <span style={{ fontSize: 12.5, color: 'var(--text-faint)' }}>选择工作空间…</span>
+                    <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--text-fainter)' }}>浏览文件夹</span>
                   </button>
                 )}
                 {workspacePicked && (
                   <div style={{
-                    display: 'flex', alignItems: 'center', gap: 8,
-                    padding: '5px 12px', borderRadius: 8,
-                    background: 'var(--accent-soft)', border: '1px solid var(--border-soft)',
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '4px 14px', marginBottom: -1, borderRadius: '16px 16px 0 0',
+                    background: 'var(--accent-soft)', border: '1px solid var(--border)', borderBottom: 'none',
                     width: '100%',
                   }}>
-                    <Icon name="folder" size={13} color="var(--accent)" />
-                    <span style={{
-                      flex: 1, fontSize: 12, color: 'var(--text-soft)',
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    }} title={workspace}>
+                    <Icon name="folder" size={12} color="var(--accent)" />
+                    <span style={{ fontSize: 11.5, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }} title={workspace}>
                       {workspace.replace(/^\/Users\/[^/]+/, '~')}
                     </span>
-                    <button
-                      onClick={pickDirectory}
-                      title="更换"
-                      style={{
-                        background: 'transparent', border: 'none', cursor: 'pointer',
-                        color: 'var(--text-faint)', fontSize: 11, padding: '2px 6px',
-                        borderRadius: 4, fontFamily: 'inherit',
-                      }}
-                    >更换</button>
+                    <button onClick={pickDirectory} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-faint)', fontSize: 10, fontFamily: 'inherit', padding: '1px 4px' }}>更换</button>
                   </div>
                 )}
 
                 <InputBox
-                onSend={send}
-                onStop={stop}
-                status={status}
-                draft={draft}
-                registerDraftSetter={(fn) => (draftRef.current = fn)}
-                commands={commands}
-                onLoadCommands={loadCommands}
-                historyMessages={historyMessages}
-                confirmEnabled={confirmEnabled}
-                onToggleConfirm={() => setConfirmEnabled(!confirmEnabled)}
-                queueCount={queue.length}
-                onClearQueue={clearQueue}
-                centered
-              />
+                  onSend={send}
+                  onStop={stop}
+                  status={status}
+                  draft={draft}
+                  registerDraftSetter={(fn) => (draftRef.current = fn)}
+                  commands={commands}
+                  onLoadCommands={loadCommands}
+                  historyMessages={historyMessages}
+                  confirmEnabled={confirmEnabled}
+                  onToggleConfirm={() => setConfirmEnabled(!confirmEnabled)}
+                  queueCount={queue.length}
+                  onClearQueue={clearQueue}
+                  centered
+                  flatTop
+                />
               </div>
             </div>
           ) : (

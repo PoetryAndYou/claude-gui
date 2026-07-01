@@ -24,6 +24,7 @@ export function InputBox({
   onClearQueue,
   historyMessages,
   centered,
+  flatTop,
 }: {
   onSend: (text: string) => void;
   onStop: () => void;
@@ -38,6 +39,7 @@ export function InputBox({
   onClearQueue?: () => void;
   historyMessages?: string[];  // 当前对话的历史用户消息，供上下键遍历
   centered?: boolean;          // 空态居中模式：去 borderTop，用于首屏/新对话居中布局
+  flatTop?: boolean;           // 顶边直角（与上方工作空间栏拼接成一体的卡片）
 }) {
   const [text, setText] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -356,7 +358,7 @@ export function InputBox({
 
       <div style={centered ? { width: '100%', display: 'flex', flexDirection: 'column', gap: 0 } : { maxWidth: 880, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 0 }}>
         {/* 输入框容器：内部含 textarea + 底部操作栏 */}
-        <div style={centered ? { ...inputContainerStyle, borderRadius: 20, boxShadow: '0 8px 32px var(--shadow), 0 2px 8px var(--shadow)' } : inputContainerStyle} ref={containerRef}>
+        <div style={centered ? { ...inputContainerStyle, borderRadius: flatTop ? '0 0 20px 20px' : 20, boxShadow: '0 8px 32px var(--shadow), 0 2px 8px var(--shadow)' } : inputContainerStyle} ref={containerRef}>
           {/* 附件区：@提及的文件/文件夹 chip + 粘贴的图片缩略图 */}
           {(mentions.length > 0 || images.length > 0) && (
             <div style={{ display: 'flex', gap: 8, padding: '10px 12px 0', flexWrap: 'wrap', alignItems: 'center' }}>
