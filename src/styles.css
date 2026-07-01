@@ -34,10 +34,10 @@
 }
 
 html.light {
-  --bg-app: #ffffff;
-  --bg-elev: #f6f8fa;
-  --bg-elev-2: #eaeef2;
-  --bg-input: #f6f8fa;
+  --bg-app: #f3f4f6;
+  --bg-elev: #ebedf0;
+  --bg-elev-2: #e2e5e9;
+  --bg-input: #ebedf0;
   /* 浅色主题下分隔线/外框需更明显（白底上原值几乎不可见），加深一档但保持柔和 */
   --border: #c8d0d8;
   --border-soft: #d3d8de;
