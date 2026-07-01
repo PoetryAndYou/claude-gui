@@ -274,19 +274,18 @@ export default function App() {
           )}
 
           {isEmpty ? (
-            /* 空态：紧凑居中，输入框为视觉焦点 */
+            /* 空态：紧凑居中，工作空间栏与输入框拼接为整体卡片 */
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 16px' }}>
-              <div style={{ width: '100%', maxWidth: 740 }}>
-                {/* 工作空间：内嵌于输入区上方，视觉一体 */}
+              <div style={{ width: '100%', maxWidth: 600, borderRadius: 20, overflow: 'hidden', boxShadow: '0 8px 32px var(--shadow), 0 2px 8px var(--shadow)' }}>
+                {/* 工作空间栏：贴顶，下无边框 */}
                 {!workspacePicked && (
                   <button
                     onClick={pickDirectory}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 8,
-                      padding: '6px 14px', marginBottom: -1, borderRadius: '16px 16px 0 0',
-                      background: 'var(--bg-elev)', border: '1px solid var(--border)', borderBottom: 'none',
-                      cursor: 'pointer', width: '100%',
-                      fontFamily: 'inherit',
+                      padding: '7px 16px', width: '100%',
+                      background: 'var(--bg-elev)', border: 'none', borderBottom: '1px solid var(--border)',
+                      cursor: 'pointer', fontFamily: 'inherit',
                     }}
                   >
                     <Icon name="folder" size={14} color="var(--text-faint)" />
@@ -297,9 +296,8 @@ export default function App() {
                 {workspacePicked && (
                   <div style={{
                     display: 'flex', alignItems: 'center', gap: 6,
-                    padding: '4px 14px', marginBottom: -1, borderRadius: '16px 16px 0 0',
-                    background: 'var(--accent-soft)', border: '1px solid var(--border)', borderBottom: 'none',
-                    width: '100%',
+                    padding: '5px 16px', width: '100%',
+                    background: 'var(--accent-soft)', borderBottom: '1px solid var(--border)',
                   }}>
                     <Icon name="folder" size={12} color="var(--accent)" />
                     <span style={{ fontSize: 11.5, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }} title={workspace}>

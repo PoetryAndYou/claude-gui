@@ -358,7 +358,7 @@ export function InputBox({
 
       <div style={centered ? { width: '100%', display: 'flex', flexDirection: 'column', gap: 0 } : { maxWidth: 880, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 0 }}>
         {/* 输入框容器：内部含 textarea + 底部操作栏 */}
-        <div style={centered ? { ...inputContainerStyle, borderRadius: flatTop ? '0 0 20px 20px' : 20, boxShadow: '0 8px 32px var(--shadow), 0 2px 8px var(--shadow)' } : inputContainerStyle} ref={containerRef}>
+        <div style={centered ? { ...inputContainerStyle, border: flatTop ? 'none' : inputContainerStyle.border, borderRadius: flatTop ? '0 0 20px 20px' : 20, boxShadow: flatTop ? 'none' : '0 8px 32px var(--shadow), 0 2px 8px var(--shadow)' } : inputContainerStyle} ref={containerRef}>
           {/* 附件区：@提及的文件/文件夹 chip + 粘贴的图片缩略图 */}
           {(mentions.length > 0 || images.length > 0) && (
             <div style={{ display: 'flex', gap: 8, padding: '10px 12px 0', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -394,8 +394,8 @@ export function InputBox({
             rows={centered ? 4 : 2}
             placeholder={centered ? '想做什么？选好工作空间后开始对话…' : '发消息给 Claude…'}
             style={{ flex: 1, resize: 'none', border: 'none', background: 'transparent', color: 'var(--text)', padding: centered ? '16px 16px 6px' : '12px 14px 4px', fontSize: centered ? 16 : 15, lineHeight: 1.6, fontFamily: 'inherit', outline: 'none', maxHeight: 200 }}
-            onFocus={() => { if (containerRef.current) containerRef.current.style.borderColor = 'var(--accent)'; }}
-            onBlur={() => { if (containerRef.current) containerRef.current.style.borderColor = 'var(--border)'; }}
+            onFocus={() => { if (!flatTop && containerRef.current) containerRef.current.style.borderColor = 'var(--accent)'; }}
+            onBlur={() => { if (!flatTop && containerRef.current) containerRef.current.style.borderColor = 'var(--border)'; }}
           />
           {/* 底部操作栏：左侧快捷按钮，右侧发送/停止 */}
           <div style={toolbarStyle}>
