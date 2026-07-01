@@ -143,8 +143,8 @@ export default function App() {
     <div style={{
       height: '100%', display: 'flex', flexDirection: 'column',
       background: isMac ? 'transparent' : 'var(--bg-app)',
-      // Windows/Linux 无边框窗口：最外层加细边框 + 微 inset 阴影，让浅色主题下窗口边界清晰可见
-      ...(isMac ? {} : { boxShadow: 'inset 0 0 0 1px var(--border)' }),
+      // Windows/Linux 无边框窗口：3px 粗外框，浅色/深色均清晰可见（模拟系统窗口边框）
+      ...(isMac ? {} : { boxShadow: 'inset 0 0 0 3px var(--win-frame)' }),
     }}>
       {/* 顶部标题栏 */}
       <header style={{
