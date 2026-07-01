@@ -289,15 +289,12 @@ export default function App() {
               </div>
 
               <div style={{ width: '100%', maxWidth: 720 }}>
-                {/* 工作空间栏：卡片顶栏 */}
+                {/* 工作空间选择：独立卡片，圆角 */}
                 <div style={{
                   display: 'flex', alignItems: 'center', gap: 10,
-                  padding: '10px 20px',
-                  borderRadius: '18px 18px 0 0',
-                  background: 'var(--bg-input)',
+                  padding: '10px 20px', marginBottom: 12,
+                  borderRadius: 14, background: 'var(--bg-input)',
                   border: '1px solid var(--border)',
-                  borderBottom: '1px solid var(--border-soft)',
-                  marginBottom: -1, position: 'relative', zIndex: 1,
                 }}>
                   {!workspacePicked ? (
                     <button
@@ -347,7 +344,6 @@ export default function App() {
                   queueCount={queue.length}
                   onClearQueue={clearQueue}
                   centered
-                  flatTop
                 />
               </div>
             </div>
