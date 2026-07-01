@@ -292,7 +292,7 @@ export default function App() {
                 {/* 工作空间选择：独立卡片，圆角 */}
                 <div style={{
                   display: 'flex', alignItems: 'center', gap: 10,
-                  padding: '10px 20px', marginBottom: 12,
+                  padding: '10px 20px 10px 36px', marginBottom: 12,
                   borderRadius: 14,
                   background: 'transparent',
                   border: '1.5px dashed var(--border)',
