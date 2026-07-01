@@ -106,8 +106,8 @@ export function MessageList({
   const canAct = status !== 'thinking';
 
   return (
-    <div style={{ position: 'relative', flex: 1, minHeight: 0, background: 'var(--bg-app)' }}>
-      <div ref={scrollRef} style={{ position: 'absolute', inset: 0, overflowY: 'auto', padding: '10px 10px' }}>
+    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', background: 'var(--bg-app)' }}>
+      <div ref={scrollRef} style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '10px 10px' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 820, margin: '0 auto' }}>
           {messages.map((m) => (
             <div key={m.id}>
