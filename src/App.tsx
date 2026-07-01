@@ -274,39 +274,58 @@ export default function App() {
           )}
 
           {isEmpty ? (
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 16px' }}>
-              <div style={{ marginBottom: 24, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                <div style={{ color: 'var(--accent)', opacity: 0.7 }}><Icon name="bolt" size={28} color="var(--accent)" /></div>
-                <div style={{ fontSize: 13, color: 'var(--text-fainter)', fontWeight: 500, letterSpacing: -0.2 }}>Claude GUI</div>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 24px' }}>
+              {/* Logo：轻盈的品牌标识 */}
+              <div style={{ marginBottom: 32, display: 'flex', alignItems: 'center', gap: 8, opacity: 0.55 }}>
+                <Icon name="bolt" size={22} color="var(--accent)" />
+                <span style={{ fontSize: 14, color: 'var(--text-faint)', fontWeight: 500, letterSpacing: -0.3 }}>Claude GUI</span>
               </div>
-              <div style={{ width: '100%', maxWidth: 640, padding: '0 20px' }}>
-                {!workspacePicked && (
-                  <div
-                    onClick={pickDirectory}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 8,
-                      padding: '6px 14px', marginBottom: 8, borderRadius: 10,
-                      background: 'var(--bg-elev)', border: '1px solid var(--border)',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <Icon name="folder" size={14} color="var(--text-muted)" />
-                    <span style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>选择工作空间…</span>
-                  </div>
-                )}
-                {workspacePicked && (
-                  <div style={{
-                    display: 'flex', alignItems: 'center', gap: 6,
-                    padding: '4px 12px', marginBottom: 8, borderRadius: 8,
-                    background: 'var(--bg-elev)', border: '1px solid var(--border)',
-                  }}>
-                    <Icon name="folder" size={12} color="var(--accent)" />
-                    <span style={{ fontSize: 11.5, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }} title={workspace}>
-                      {workspace.replace(/^\/Users\/[^/]+/, '~')}
-                    </span>
-                    <button onClick={(e) => { e.stopPropagation(); pickDirectory(); }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-faint)', fontSize: 10, fontFamily: 'inherit' }}>更换</button>
-                  </div>
-                )}
+
+              <div style={{ width: '100%', maxWidth: 640 }}>
+                {/* 工作空间行：与输入框同视觉语言 */}
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '8px 16px', marginBottom: -1, position: 'relative', zIndex: 1,
+                  borderRadius: '16px 16px 0 0',
+                  background: 'var(--bg-input)',
+                  border: '1px solid var(--border)',
+                  borderBottom: '1px solid var(--border-soft)',
+                }}>
+                  {!workspacePicked ? (
+                    <button
+                      onClick={pickDirectory}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 8,
+                        background: 'transparent', border: 'none', cursor: 'pointer',
+                        color: 'var(--text-faint)', fontSize: 12.5, fontFamily: 'inherit',
+                        flex: 1, justifyContent: 'center', padding: '2px 0',
+                        borderRadius: 6,
+                      }}
+                    >
+                      <Icon name="folder" size={14} color="var(--text-muted)" />
+                      <span>选择工作空间以开始…</span>
+                    </button>
+                  ) : (
+                    <>
+                      <Icon name="folder" size={14} color="var(--accent)" />
+                      <span style={{
+                        flex: 1, fontSize: 12, color: 'var(--text-soft)',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }} title={workspace}>
+                        {workspace.replace(/^\/Users\/[^/]+/, '~')}
+                      </span>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); pickDirectory(); }}
+                        style={{
+                          background: 'var(--accent-soft)', border: 'none', cursor: 'pointer',
+                          color: 'var(--accent)', fontSize: 10.5, fontWeight: 500,
+                          padding: '3px 8px', borderRadius: 5, fontFamily: 'inherit',
+                        }}
+                      >更换</button>
+                    </>
+                  )}
+                </div>
+
                 <InputBox
                   onSend={send}
                   onStop={stop}
@@ -321,6 +340,7 @@ export default function App() {
                   queueCount={queue.length}
                   onClearQueue={clearQueue}
                   centered
+                  flatTop
                 />
               </div>
             </div>
