@@ -108,7 +108,7 @@ export function MessageList({
 
   return (
     <div style={{ position: 'relative', flex: 1, minHeight: 0, background: 'var(--bg-app)' }}>
-      <div ref={scrollRef} style={{ height: '100%', overflowY: 'auto', padding: '10px 10px' }}>
+      <div ref={scrollRef} style={{ position: 'absolute', inset: 0, overflowY: 'auto', padding: '10px 10px' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 820, margin: '0 auto' }}>
           {messages.map((m) => (
             <div key={m.id}>
