@@ -289,10 +289,11 @@ export default function App() {
               </div>
 
               <div style={{ width: '100%', maxWidth: 680 }}>
-                {/* 工作空间选择：独立卡片，圆角 */}
+                {/* 工作空间选择：与 InputBox 同宽（同 padding），虚线卡片 */}
+                <div style={{ padding: '0 20px', marginBottom: 12 }}>
                 <div style={{
                   display: 'flex', alignItems: 'center', gap: 10,
-                  padding: '10px 20px 10px 36px', marginBottom: 12,
+                  padding: '10px 16px',
                   borderRadius: 14,
                   background: 'transparent',
                   border: '1.5px dashed var(--border)',
@@ -329,6 +330,7 @@ export default function App() {
                       >更换</button>
                     </>
                   )}
+                </div>
                 </div>
 
                 <InputBox
