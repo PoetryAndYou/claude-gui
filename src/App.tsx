@@ -113,8 +113,8 @@ export default function App() {
     refreshConvList();
   }, [refreshWorkspacePicked, refreshConvList]);
 
-  // 空态（无消息且未选工作空间）→ 输入框居中布局；否则常规底部布局
-  const isEmpty = messages.length === 0 && !workspacePicked;
+  // 空态：无消息时居中布局（不管是否已选工作空间），发送首条消息后切常规布局
+  const isEmpty = messages.length === 0;
   // 历史用户消息（供输入框上下键遍历）。useMemo：messages 每 chunk 都换引用，
   // 若不记忆会每个 chunk 都重算并驱动 InputBox 全量重渲染
   const historyMessages = useMemo(
@@ -274,42 +274,68 @@ export default function App() {
           )}
 
           {isEmpty ? (
-            /* 空态居中：引导 + 工作空间选择 + 居中放大输入框（用户选空间后切回常规布局） */
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20, padding: '0 16px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, color: 'var(--text-fainter)' }}>
-                <div style={{ color: 'var(--accent)' }}><Icon name="bolt" size={40} color="var(--accent)" /></div>
-                <div style={{ fontSize: 20, color: 'var(--text-faint)', fontWeight: 500 }}>Claude GUI</div>
+            /* 空态居中：引导 + 工作空间选择 + 输入框（发送首条消息后切常规布局） */
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: '0 16px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                <div style={{ color: 'var(--accent)', opacity: 0.8 }}><Icon name="bolt" size={36} color="var(--accent)" /></div>
+                <div style={{ fontSize: 18, color: 'var(--text-muted)', fontWeight: 500, letterSpacing: -0.3 }}>Claude GUI</div>
               </div>
 
-              {/* 工作空间选择卡片 */}
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 12,
-                padding: '12px 20px', borderRadius: 12,
-                background: 'var(--bg-elev)', border: '1px solid var(--border)',
-                width: '100%', maxWidth: 560,
-              }}>
-                <Icon name="folder" size={20} color="var(--accent)" />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 2 }}>工作空间</div>
-                  <div style={{
-                    fontSize: 13, color: workspace ? 'var(--text)' : 'var(--text-faint)',
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                  }} title={workspace}>
-                    {workspace ? workspace.replace(/^\/Users\/[^/]+/, '~') : '尚未选择，请先选择项目目录'}
-                  </div>
-                </div>
+              {/* 工作空间选择：紧凑一行式 */}
+              {!workspacePicked && (
                 <button
                   onClick={pickDirectory}
                   style={{
-                    padding: '7px 16px', borderRadius: 8, border: '1px solid var(--accent)',
-                    background: 'var(--accent-soft)', color: 'var(--accent)',
-                    cursor: 'pointer', fontSize: 13, fontWeight: 500,
-                    whiteSpace: 'nowrap', fontFamily: 'inherit',
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '10px 18px', borderRadius: 10,
+                    background: 'var(--bg-elev)',
+                    border: '1px dashed var(--border)',
+                    cursor: 'pointer',
+                    width: '100%', maxWidth: 480,
+                    transition: 'border-color .15s, background .15s',
+                    fontFamily: 'inherit',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = 'var(--accent)';
+                    e.currentTarget.style.background = 'var(--accent-soft)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = 'var(--border)';
+                    e.currentTarget.style.background = 'var(--bg-elev)';
                   }}
                 >
-                  <Icon name="folder" size={14} color="var(--accent)" /> 浏览…
+                  <Icon name="folder" size={18} color="var(--text-faint)" />
+                  <span style={{ flex: 1, textAlign: 'left', fontSize: 13, color: 'var(--text-faint)', fontWeight: 400 }}>
+                    选择工作空间…
+                  </span>
+                  <span style={{ fontSize: 11, color: 'var(--text-fainter)' }}>点击浏览文件夹</span>
                 </button>
-              </div>
+              )}
+              {workspacePicked && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '6px 14px', borderRadius: 8,
+                  background: 'var(--accent-soft)', border: '1px solid var(--border-soft)',
+                  maxWidth: 480, width: '100%',
+                }}>
+                  <Icon name="folder" size={14} color="var(--accent)" />
+                  <span style={{
+                    flex: 1, fontSize: 12, color: 'var(--text-soft)',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }} title={workspace}>
+                    {workspace.replace(/^\/Users\/[^/]+/, '~')}
+                  </span>
+                  <button
+                    onClick={pickDirectory}
+                    title="更换"
+                    style={{
+                      background: 'transparent', border: 'none', cursor: 'pointer',
+                      color: 'var(--text-faint)', fontSize: 11, padding: '2px 6px',
+                      borderRadius: 4, fontFamily: 'inherit',
+                    }}
+                  >更换</button>
+                </div>
+              )}
 
               <div style={{ width: '100%', maxWidth: 920 }}>
               <InputBox
