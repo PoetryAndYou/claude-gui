@@ -293,8 +293,9 @@ export default function App() {
                 <div style={{
                   display: 'flex', alignItems: 'center', gap: 10,
                   padding: '10px 20px', marginBottom: 12,
-                  borderRadius: 14, background: 'var(--bg-input)',
-                  border: '1px solid var(--border)',
+                  borderRadius: 14,
+                  background: 'transparent',
+                  border: '1.5px dashed var(--border)',
                 }}>
                   {!workspacePicked ? (
                     <button
