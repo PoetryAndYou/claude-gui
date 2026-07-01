@@ -274,42 +274,49 @@ export default function App() {
           )}
 
           {isEmpty ? (
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 24px' }}>
-              {/* Logo：轻盈的品牌标识 */}
-              <div style={{ marginBottom: 32, display: 'flex', alignItems: 'center', gap: 8, opacity: 0.55 }}>
-                <Icon name="bolt" size={22} color="var(--accent)" />
-                <span style={{ fontSize: 14, color: 'var(--text-faint)', fontWeight: 500, letterSpacing: -0.3 }}>Claude GUI</span>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 32px' }}>
+              {/* 品牌标识：大气舒展 */}
+              <div style={{ marginBottom: 40, textAlign: 'center' }}>
+                <div style={{ marginBottom: 12 }}>
+                  <Icon name="bolt" size={40} color="var(--accent)" />
+                </div>
+                <div style={{ fontSize: 24, color: 'var(--text)', fontWeight: 600, letterSpacing: -0.5, marginBottom: 6 }}>
+                  Claude GUI
+                </div>
+                <div style={{ fontSize: 14, color: 'var(--text-faint)', fontWeight: 400 }}>
+                  像聊天一样使用 Claude Code
+                </div>
               </div>
 
-              <div style={{ width: '100%', maxWidth: 640 }}>
-                {/* 工作空间行：与输入框同视觉语言 */}
+              <div style={{ width: '100%', maxWidth: 720 }}>
+                {/* 工作空间栏：卡片顶栏 */}
                 <div style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  padding: '8px 16px', marginBottom: -1, position: 'relative', zIndex: 1,
-                  borderRadius: '16px 16px 0 0',
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '10px 20px',
+                  borderRadius: '18px 18px 0 0',
                   background: 'var(--bg-input)',
                   border: '1px solid var(--border)',
                   borderBottom: '1px solid var(--border-soft)',
+                  marginBottom: -1, position: 'relative', zIndex: 1,
                 }}>
                   {!workspacePicked ? (
                     <button
                       onClick={pickDirectory}
                       style={{
-                        display: 'flex', alignItems: 'center', gap: 8,
+                        display: 'flex', alignItems: 'center', gap: 10,
                         background: 'transparent', border: 'none', cursor: 'pointer',
-                        color: 'var(--text-faint)', fontSize: 12.5, fontFamily: 'inherit',
-                        flex: 1, justifyContent: 'center', padding: '2px 0',
-                        borderRadius: 6,
+                        color: 'var(--text-faint)', fontSize: 14, fontFamily: 'inherit',
+                        flex: 1, justifyContent: 'center', padding: '4px 0',
                       }}
                     >
-                      <Icon name="folder" size={14} color="var(--text-muted)" />
-                      <span>选择工作空间以开始…</span>
+                      <Icon name="folder" size={16} color="var(--text-muted)" />
+                      选择项目目录…
                     </button>
                   ) : (
                     <>
-                      <Icon name="folder" size={14} color="var(--accent)" />
+                      <Icon name="folder" size={16} color="var(--accent)" />
                       <span style={{
-                        flex: 1, fontSize: 12, color: 'var(--text-soft)',
+                        flex: 1, fontSize: 13, color: 'var(--text-soft)',
                         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                       }} title={workspace}>
                         {workspace.replace(/^\/Users\/[^/]+/, '~')}
@@ -317,9 +324,9 @@ export default function App() {
                       <button
                         onClick={(e) => { e.stopPropagation(); pickDirectory(); }}
                         style={{
-                          background: 'var(--accent-soft)', border: 'none', cursor: 'pointer',
-                          color: 'var(--accent)', fontSize: 10.5, fontWeight: 500,
-                          padding: '3px 8px', borderRadius: 5, fontFamily: 'inherit',
+                          background: 'transparent', border: '1px solid var(--border)',
+                          cursor: 'pointer', color: 'var(--text-muted)', fontSize: 12,
+                          padding: '4px 12px', borderRadius: 6, fontFamily: 'inherit',
                         }}
                       >更换</button>
                     </>
