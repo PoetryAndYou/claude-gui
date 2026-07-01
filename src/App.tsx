@@ -275,7 +275,7 @@ export default function App() {
 
           {isEmpty ? (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 16px' }}>
-              <div style={{ width: '100%', maxWidth: 640 }}>
+              <div style={{ width: '100%', maxWidth: 640, padding: '0 20px' }}>
                 {!workspacePicked && (
                   <div
                     onClick={pickDirectory}
