@@ -45,12 +45,6 @@ export function Sidebar({
     window.claude.getWorkspace().then(setWorkspace);
   }, [activeConvId]);
 
-  const pickDir = async () => {
-    const dir = await window.claude.pickDirectory();
-    if (dir) setWorkspace(dir);
-    onWorkspaceChange?.();
-  };
-
   // force=false: 切换展开/收起（未见数据则加载，已展开则收起）
   // force=true: 强制刷新（重新从 claude 拉取）
   const load = async (force = false) => {
@@ -113,10 +107,10 @@ export function Sidebar({
       {/* 次要工具：工作空间 + 命令/技能/代理。沉到底部，用细分隔线与对话区隔开。
           flex:0 0 auto 保证不被压缩；命令列表内部 maxHeight+滚动，多命令不挤压上方对话区 */}
       <div style={{ marginTop: 8, paddingTop: 10, borderTop: '1px solid var(--border-soft)', display: 'flex', flexDirection: 'column', gap: 8, flex: '0 0 auto' }}>
-        <button onClick={pickDir} title={workspace} style={{ ...footerBtnStyle, display: 'flex', alignItems: 'center', gap: 7 }}>
-          <Icon name="folder" size={14} color="var(--text-muted)" />
-          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{shortPath.length > 22 ? '…' + shortPath.slice(-21) : shortPath || '选择工作空间'}</span>
-        </button>
+	        <div title={workspace} style={{ ...footerBtnStyle, display: 'flex', alignItems: 'center', gap: 7, cursor: 'default' }}>
+	          <Icon name="folder" size={14} color="var(--text-muted)" />
+	          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{shortPath.length > 22 ? '…' + shortPath.slice(-21) : shortPath || '选择工作空间'}</span>
+	        </div>
 
         {/* 查看 + 刷新 分开：查看仅展示已加载（不跑 claude 不覆盖对话）；刷新才重新拉取 */}
         <div style={{ display: 'flex', gap: 6, alignItems: 'stretch' }}>
