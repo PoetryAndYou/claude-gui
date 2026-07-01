@@ -74,12 +74,16 @@ export function MessageList({
     // 新消息追加等其它情况：平滑（smooth）
     const isStreaming = !isSwitch && !!prev && messages.length === prev.length && status === 'thinking';
     const behavior: ScrollBehavior = (isSwitch || isStreaming) ? 'auto' : 'smooth';
-    bottomRef.current?.scrollIntoView({ behavior, block: 'end' });
+    // requestAnimationFrame 确保 DOM 完成布局后再滚（特别是首条消息时容器刚挂载）
+    requestAnimationFrame(() => {
+      bottomRef.current?.scrollIntoView({ behavior, block: 'end' });
+    });
   }, [messages, atBottom, status]);
 
   const scrollToBottom = () => {
-    // 思考中底部不断增高，smooth 动画追不上 → 用 auto 瞬到底
-    bottomRef.current?.scrollIntoView({ behavior: status === 'thinking' ? 'auto' : 'smooth' });
+    requestAnimationFrame(() => {
+      bottomRef.current?.scrollIntoView({ behavior: status === 'thinking' ? 'auto' : 'smooth' });
+    });
     setAtBottom(true);
   };
 
