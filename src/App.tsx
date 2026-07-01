@@ -24,7 +24,7 @@ export default function App() {
   const {
     messages, status, error, notice, commands,
     convList, activeId,
-    send, stop, newChat, switchConv, deleteConv, renameConv, loadCommands,
+    send, stop, newChat, switchConv, deleteConv, renameConv, loadCommands, refreshConvList,
     regenerate, editAndResend,
     importConvs,
     setModelOpener,
@@ -84,8 +84,9 @@ export default function App() {
   const [currentMode, setCurrentMode] = useState<string>('acceptEdits');
   // 当前对话是否已显式选过工作空间（决定首屏/空态输入框居中布局）
   const [workspacePicked, setWorkspacePicked] = useState(false);
+  const [workspace, setWorkspace] = useState('');
   const refreshWorkspacePicked = useCallback(() => {
-    window.claude.getWorkspaceInfo().then((info) => setWorkspacePicked(info.picked)).catch(() => {});
+    window.claude.getWorkspaceInfo().then((info) => { setWorkspacePicked(info.picked); setWorkspace(info.workspace); }).catch(() => {});
   }, []);
   // 对话切换 / pick 目录后刷新 picked 状态
   useEffect(() => { refreshWorkspacePicked(); }, [activeId]);
@@ -107,9 +108,10 @@ export default function App() {
 
   const pickDirectory = useCallback(async () => {
     await window.claude.pickDirectory();
-    // 选完目录后刷新 picked 状态（首屏选空间 → 触发从居中切到常规布局）
+    // 选完目录后刷新 picked 状态 + 对话列表（侧栏分组需更新）
     refreshWorkspacePicked();
-  }, [refreshWorkspacePicked]);
+    refreshConvList();
+  }, [refreshWorkspacePicked, refreshConvList]);
 
   // 空态（无消息且未选工作空间）→ 输入框居中布局；否则常规底部布局
   const isEmpty = messages.length === 0 && !workspacePicked;
@@ -272,12 +274,43 @@ export default function App() {
           )}
 
           {isEmpty ? (
-            /* 空态居中：引导 + 居中放大输入框（用户选空间后切回常规布局） */
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 24, padding: '0 16px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, color: 'var(--text-fainter)' }}>
+            /* 空态居中：引导 + 工作空间选择 + 居中放大输入框（用户选空间后切回常规布局） */
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20, padding: '0 16px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, color: 'var(--text-fainter)' }}>
                 <div style={{ color: 'var(--accent)' }}><Icon name="bolt" size={40} color="var(--accent)" /></div>
                 <div style={{ fontSize: 20, color: 'var(--text-faint)', fontWeight: 500 }}>Claude GUI</div>
               </div>
+
+              {/* 工作空间选择卡片 */}
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 12,
+                padding: '12px 20px', borderRadius: 12,
+                background: 'var(--bg-elev)', border: '1px solid var(--border)',
+                width: '100%', maxWidth: 560,
+              }}>
+                <Icon name="folder" size={20} color="var(--accent)" />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 2 }}>工作空间</div>
+                  <div style={{
+                    fontSize: 13, color: workspace ? 'var(--text)' : 'var(--text-faint)',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }} title={workspace}>
+                    {workspace ? workspace.replace(/^\/Users\/[^/]+/, '~') : '尚未选择，请先选择项目目录'}
+                  </div>
+                </div>
+                <button
+                  onClick={pickDirectory}
+                  style={{
+                    padding: '7px 16px', borderRadius: 8, border: '1px solid var(--accent)',
+                    background: 'var(--accent-soft)', color: 'var(--accent)',
+                    cursor: 'pointer', fontSize: 13, fontWeight: 500,
+                    whiteSpace: 'nowrap', fontFamily: 'inherit',
+                  }}
+                >
+                  <Icon name="folder" size={14} color="var(--accent)" /> 浏览…
+                </button>
+              </div>
+
               <div style={{ width: '100%', maxWidth: 920 }}>
               <InputBox
                 onSend={send}

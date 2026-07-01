@@ -613,10 +613,17 @@ export function useClaude() {
     setCommands(items);
   }, []);
 
+  // 刷新对话列表（工作空间变更后侧栏分组需更新）
+  const refreshConvList = useCallback(async () => {
+    const { conversations, activeId: aid } = await window.claude.conv.list();
+    setConvList(conversations);
+    if (aid && aid !== activeId) setActiveId(aid);
+  }, [activeId]);
+
   return {
     messages, status, error, notice, commands,
     convList, activeId,
-    send, stop, newChat, switchConv, deleteConv, renameConv, loadCommands,
+    send, stop, newChat, switchConv, deleteConv, renameConv, loadCommands, refreshConvList,
     regenerate, editAndResend,
     importConvs,
     fireAsk,
