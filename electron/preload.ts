@@ -75,7 +75,7 @@ export interface ConvAPI {
 }
 
 export interface ClaudeAPI {
-  ask: (prompt: string, confirmEnabled?: boolean) => Promise<void>;
+  ask: (prompt: string, confirmEnabled?: boolean, convId?: string | null) => Promise<void>;
   stop: () => Promise<void>;
   newChat: () => Promise<string>;
   // 变更确认（两轮调用）
@@ -131,7 +131,7 @@ export interface ClaudeAPI {
 }
 
 contextBridge.exposeInMainWorld('claude', {
-  ask: (prompt: string, confirmEnabled?: boolean) => ipcRenderer.invoke('claude:ask', prompt, !!confirmEnabled),
+  ask: (prompt: string, confirmEnabled?: boolean, convId?: string | null) => ipcRenderer.invoke('claude:ask', prompt, !!confirmEnabled, convId ?? null),
   stop: () => ipcRenderer.invoke('claude:stop'),
   newChat: () => ipcRenderer.invoke('claude:new-chat'),
   // 变更确认

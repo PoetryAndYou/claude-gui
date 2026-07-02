@@ -526,7 +526,7 @@ ipcMain.handle('claude:set-mode', (_e, mode: string | null) => {
 // confirmEnabled: 是否走两轮（第一轮 default 预览，第二轮 acceptEdits 执行）
 // 核心执行体：抽出来供 claude:ask 和 claude:confirm-approve 复用
 // onDone 回调：claude 进程真正结束（result 事件 / close）后调用，闸门用它驱动串行
-function executeAsk(prompt: string, confirmEnabled: boolean, onDone?: () => void): Promise<void> {
+function executeAsk(prompt: string, confirmEnabled: boolean, convId: string | null, onDone?: () => void): Promise<void> {
   return new Promise<void>((resolve) => {
     let retried = false;
     // 统一收尾：保证 onDone 只调一次（多个 resolve 路径都可能触发）
@@ -534,8 +534,10 @@ function executeAsk(prompt: string, confirmEnabled: boolean, onDone?: () => void
     const fireDone = () => { if (!doneFired) { doneFired = true; onDone?.(); } };
     // 包装 resolve：先触发 onDone，再 resolve 给闸门
     const done = () => { fireDone(); resolve(); };
-    // 记住本次生成属于哪个对话，切对话不影响后台 chunk 路由
-    const genConvId = activeConvId;
+    // 显式传入本次生成所属的对话 id（不依赖全局 activeConvId，切对话不打扰后台路由）
+    const genConvId = convId ?? activeConvId;
+    // 按 convId 查该对话的 session / model / mode / workspace（不再用全局 current*）
+    const convFor = () => conversations.find((c) => c.id === genConvId) || null;
     // 降级保护：确认模式依赖 --permission-mode（default/acceptEdits 切换）。
     // 探测不到 permission-mode 的极旧版 claude，强制退化为单轮 execute，保证不崩。
     detectFlags();
@@ -547,11 +549,14 @@ function executeAsk(prompt: string, confirmEnabled: boolean, onDone?: () => void
 
     // phase: 'preview' = 第一轮(default 模式抓意图)，'execute' = 第二轮(acceptEdits 真跑)
     const runOnce = (useResume: boolean, phase: 'preview' | 'execute' = 'execute') => {
-      syncWorkspace();  // 用当前对话的工作目录
+      const conv = convFor();
+      // 用该对话自己的 workspace / session / model / mode（不受全局 activeConvId 切换影响）
+      const convWs = conv?.workspace || currentWorkspace();
+      workspace = convWs;  // spawn cwd 用它
       clearAllTimers();  // 清掉上一轮残留的吐字定时器
-      const sid = currentSessionId();
-      const model = currentModel();
-      const mode = currentMode();
+      const sid = conv?.sessionId ?? null;
+      const model = conv?.model ?? null;
+      const mode = conv?.mode || 'acceptEdits';
       detectFlags();  // 探测 claude 支持的 flag
       // 参数：2.1.34 及以上都支持，探测到才加（探测不到则退化保证能跑）
       // --verbose 必填：2.1.193 起 -p --output-format stream-json 不配 --verbose 直接报错退出
@@ -802,27 +807,28 @@ function executeAsk(prompt: string, confirmEnabled: boolean, onDone?: () => void
 // main 进程串行闸门：用 executeAsk 的 onDone 回调（claude 真正结束时触发）驱动下一条
 // 不用 Promise.then：executeAsk 的 resolve 时机和 claude close 不一致，onDone 才准确
 let askBusy = false;
-let askQueue: Array<{ prompt: string; confirmEnabled: boolean; resolve: () => void }> = [];
-function runAskOne(prompt: string, confirmEnabled: boolean, onQueueDone: () => void) {
+let askQueue: Array<{ prompt: string; confirmEnabled: boolean; convId: string | null; resolve: () => void }> = [];
+function runAskOne(prompt: string, confirmEnabled: boolean, convId: string | null, onQueueDone: () => void) {
   askBusy = true;
-  executeAsk(prompt, confirmEnabled, () => {
+  executeAsk(prompt, confirmEnabled, convId, () => {
     if (askQueue.length > 0) {
       const item = askQueue.shift()!;
-      runAskOne(item.prompt, item.confirmEnabled, () => item.resolve());
+      runAskOne(item.prompt, item.confirmEnabled, item.convId, () => item.resolve());
     } else {
       askBusy = false;
     }
     onQueueDone();
   });
 }
-ipcMain.handle('claude:ask', (_e, prompt: string, confirmEnabled = false) => {
+ipcMain.handle('claude:ask', (_e, prompt: string, confirmEnabled = false, convId: string | null = null) => {
+  const cid = convId || activeConvId;  // 用发起对话的 id（切对话后仍路由回它）
   if (askBusy) {
     return new Promise<void>((resolve) => {
-      askQueue.push({ prompt, confirmEnabled, resolve });
+      askQueue.push({ prompt, confirmEnabled, convId: cid, resolve });
     });
   }
   return new Promise<void>((resolve) => {
-    runAskOne(prompt, confirmEnabled, () => resolve());
+    runAskOne(prompt, confirmEnabled, cid, () => resolve());
   });
 });
 
@@ -838,7 +844,7 @@ ipcMain.handle('claude:confirm-approve', () => {
   // 第二轮：切到目标对话，execute phase（acceptEdits/bypassPermissions 真正执行）
   activeConvId = cid;
   sendConv(cid, 'claude:status', 'thinking');
-  return executeAsk(prompt, false);
+  return executeAsk(prompt, false, cid);
 });
 
 // 用户点「拒绝」：清空待确认状态，标记对话结束

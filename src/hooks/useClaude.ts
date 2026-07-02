@@ -338,7 +338,7 @@ export function useClaude() {
     // 仅在目标对话是当前活跃对话时标记全局 thinking；
     // 后台对话出队发送不污染活跃对话的 status（否则活跃对话的 send 会误判入队）
     if (curId === activeIdRef.current) setStatusSynced('thinking');
-    await window.claude.ask(text, useConfirm);
+    await window.claude.ask(text, useConfirm, curId);
   }, []);
 
   // /model 接管：由 App 注入（打开模型选择器）。用 ref 避免闭包过期
@@ -424,7 +424,7 @@ export function useClaude() {
       });
       // 立即标记 thinking（同步 ref），防止后续快速连发同时进入 ask（应入队串行执行）
       setStatusSynced('thinking');
-      await window.claude.ask(trimmed, confirmEnabled);
+      await window.claude.ask(trimmed, confirmEnabled, curId);
     },
     [status, activeId, confirmEnabled],
   );
@@ -454,7 +454,7 @@ export function useClaude() {
         if (!c) return prev;
         return { ...prev, [activeId!]: { messages: c.messages.slice(0, userIdx) } };
       });
-      await window.claude.ask(userText, confirmEnabled);
+      await window.claude.ask(userText, confirmEnabled, activeId);
     },
     [activeId, status, convs, confirmEnabled],
   );
@@ -486,7 +486,7 @@ export function useClaude() {
         const c = prev[activeId!];
         return { ...prev, [activeId!]: { messages: [...(c?.messages ?? []), { id: `u-${Date.now()}`, role: 'user', content: trimmed }] } };
       });
-      await window.claude.ask(trimmed, confirmEnabled);
+      await window.claude.ask(trimmed, confirmEnabled, activeId);
     },
     [activeId, status, convs, confirmEnabled],
   );
