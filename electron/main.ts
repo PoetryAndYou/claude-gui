@@ -1126,12 +1126,17 @@ ipcMain.handle('claude:set-native-theme', (_e, theme: 'light' | 'dark') => {
 });
 
 // 加载历史消息：从 claude session jsonl 文件解析对话历史
+// 注意：用该 sessionId 所属对话的 workspace（而非全局 current），
+// 否则切对话时 syncWorkspace 取了别的对话 cwd，加载到错误历史
 ipcMain.handle('claude:load-history', (_e, sessionId: string) => {
   if (!sessionId) return [];
-  syncWorkspace();
   const home = require('os').homedir();
-  // session 文件在 ~/.claude/projects/<编码cwd>/<session>.jsonl，cwd 的路径分隔符替换成 -
-  const encodedCwd = workspace.replace(/[/\\]/g, '-');
+  // 反查该 sessionId 对应对话的 workspace（历史文件路径依赖它）
+  const targetConv = conversations.find((c) => c.sessionId === sessionId);
+  let ws = '';
+  if (targetConv?.workspace) ws = targetConv.workspace;
+  else ws = currentWorkspace();
+  const encodedCwd = ws.replace(/[/\\]/g, '-');
   const candidates = [
     path.join(home, '.claude/projects', encodedCwd, `${sessionId}.jsonl`),
   ];

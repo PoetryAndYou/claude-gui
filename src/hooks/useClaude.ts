@@ -397,10 +397,11 @@ export function useClaude() {
         else if (routed.action === 'model') modelOpenerRef.current?.();
         return;
       }
-      // 思考中（含等待确认）：入队到当前对话，保证消息和回答一一对应，顺序不打乱
-      // 用 statusRef 同步判断，避免连发时读到旧 state 没入队；
-      // main 进程也有串行闸门（askBusy），双保险
-      if (statusRef.current === 'thinking') {
+      // 当前对话正在思考中 → 入队到该对话，保证消息顺序
+      // 用 streamingIds 判断该对话是否在生成（per-conv，不污染其它对话）
+      // 同时 main 进程 askBusy 全局串行：其它对话在跑也算"忙"，本对话非生成中也会被 main 排队
+      const currentConvBusy = !!(activeId && streamingIds.current[activeId]);
+      if (currentConvBusy) {
         const cid = activeId || '';
         queueRef.current = { ...queueRef.current, [cid]: [...(queueRef.current[cid] || []), trimmed] };
         setQueue({ ...queueRef.current });
@@ -435,7 +436,7 @@ export function useClaude() {
    */
   const regenerate = useCallback(
     async (assistantMsgId: string) => {
-      if (!activeId || status === 'thinking') return;
+      if (!activeId || streamingIds.current[activeId]) return;
       const conv = convs[activeId];
       if (!conv) return;
       const idx = conv.messages.findIndex((m) => m.id === assistantMsgId);
